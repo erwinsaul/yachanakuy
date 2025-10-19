@@ -28,6 +28,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
         settings: settings,
         page: "inscripcion",
         error: nil,
+        errors: %{},  # Nuevo: para almacenar errores por campo
         success: nil
       )
       |> allow_upload(:comprobante_pago,
@@ -45,29 +46,32 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     
     case current_step do
       1 -> 
-        # Validar Paso 1
+        # Validar Paso 1 - registrar errores por campo
         registration_data = socket.assigns.registration_data
-        errors = validate_step1_data(registration_data, socket)
-        if errors == [] do
+        field_errors = validate_step1_field_errors(registration_data, socket)
+        
+        if map_size(field_errors) == 0 do
+          # Si no hay errores, avanzar al siguiente paso
           new_step = current_step + 1
-          socket = assign(socket, current_step: new_step, error: nil)  # Limpiar error
+          socket = assign(socket, current_step: new_step, errors: %{})  # Limpiar errores
           {:noreply, socket}
         else
-          error_message = Enum.join(errors, ", ")
-          socket = assign(socket, error: error_message)
+          # Si hay errores, mantener en el mismo paso y mostrar errores por campo
+          socket = assign(socket, errors: field_errors)
           {:noreply, socket}
         end
       2 -> 
-        # Validar Paso 2
+        # Validar Paso 2 - registrar errores por campo
         registration_data = socket.assigns.registration_data
-        errors = validate_step2_data(registration_data)
-        if errors == [] do
+        field_errors = validate_step2_field_errors(registration_data)
+        
+        if map_size(field_errors) == 0 do
           new_step = current_step + 1
-          socket = assign(socket, current_step: new_step, error: nil)  # Limpiar error
+          socket = assign(socket, current_step: new_step, errors: %{})  # Limpiar errores
           {:noreply, socket}
         else
-          error_message = Enum.join(errors, ", ")
-          socket = assign(socket, error: error_message)
+          # Si hay errores, mantener en el mismo paso y mostrar errores por campo
+          socket = assign(socket, errors: field_errors)
           {:noreply, socket}
         end
       _ ->
@@ -94,23 +98,26 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
 
 
 
-  defp validate_step1_data(registration_data, socket) do
-    errors = []
+  defp validate_step1_field_errors(registration_data, socket) do
+    errors = %{}
     
+    # Validar institución
     errors = if registration_data.institucion == "" or is_nil(registration_data.institucion) do
-      errors ++ ["Falta completar el campo Institución"]
+      Map.put(errors, :institucion, "La institución es obligatoria")
     else
       errors
     end
     
+    # Validar cantidad de personas
     errors = if registration_data.cantidad_personas <= 0 do
-      errors ++ ["La cantidad de personas debe ser mayor a 0"]
+      Map.put(errors, :cantidad_personas, "La cantidad debe ser mayor a 0")
     else
       errors
     end
     
+    # Validar comprobante de pago
     errors = if not has_comprobante_pago?(socket) do
-      errors ++ ["Falta subir el comprobante de pago"]
+      Map.put(errors, :comprobante_pago, "El comprobante de pago es obligatorio")
     else
       errors
     end
@@ -118,35 +125,30 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     errors
   end
 
-  defp validate_step2_data(registration_data) do
+  defp validate_step2_field_errors(registration_data) do
     required_fields = [:nombre_completo, :numero_documento, :email, :category_id]
     
-    # Verificar que cada participante tenga los campos requeridos
+    # Validar cada participante y acumular errores
     registration_data.participantes
     |> Enum.with_index
-    |> Enum.reduce([], fn {participante, index}, acc_errors ->
+    |> Enum.reduce(%{}, fn {participante, index}, acc_errors ->
       missing_fields = Enum.filter(required_fields, fn field ->
         value = Map.get(participante, field)
         is_nil(value) or value == ""
       end)
       
-      if missing_fields != [] do
-        field_names = missing_fields
-        |> Enum.map(fn field -> 
-          case field do
-            :nombre_completo -> "Nombre completo"
-            :numero_documento -> "Número de documento"
-            :email -> "Email"
-            :category_id -> "Categoría"
-            _ -> Atom.to_string(field)
-          end
-        end)
-        |> Enum.join(", ")
-        
-        acc_errors ++ ["Participante #{index + 1}: falta(n) #{field_names}"]
-      else
-        acc_errors
-      end
+      # Agregar errores para cada campo faltante
+      Enum.reduce(missing_fields, acc_errors, fn field, inner_errors ->
+        field_key = "participante_#{index}_#{field}" |> String.to_atom()
+        error_msg = case field do
+          :nombre_completo -> "Nombre completo es obligatorio"
+          :numero_documento -> "Número de documento es obligatorio"
+          :email -> "Email es obligatorio"
+          :category_id -> "Categoría es obligatoria"
+          _ -> "Este campo es obligatorio"
+        end
+        Map.put(inner_errors, field_key, error_msg)
+      end)
     end)
   end
 
@@ -265,72 +267,66 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     ~H"""
     <div class="min-h-screen bg-gradient-to-br from-blue-900 to-indigo-900 py-8">
       <div class="container mx-auto px-4 py-8 max-w-4xl">
-        <%= if @error do %>
-          <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-            <%= @error %>
-          </div>
-        <% else %>
-          <%= if @current_step do %>
-            <div class="bg-white rounded-lg shadow-lg p-6">
-              <!-- Indicador de pasos -->
-              <div class="mb-8">
-                <h1 class="text-3xl font-bold mb-4 text-[#144D85]">Formulario de Inscripción</h1>
+        <%= if @current_step do %>
+          <div class="bg-white rounded-lg shadow-lg p-6">
+            <!-- Indicador de pasos -->
+            <div class="mb-8">
+              <h1 class="text-3xl font-bold mb-4 text-[#144D85]">Formulario de Inscripción</h1>
+              
+              <!-- Barra de progreso -->
+              <div class="flex items-center justify-between mb-6">
+                <div class="flex flex-col items-center">
+                  <div class={"w-8 h-8 rounded-full flex items-center justify-center " <> 
+                    if(@current_step >= 1, do: "bg-[#144D85] text-white", else: "bg-gray-400 text-white")}>
+                    1
+                  </div>
+                  <span class="text-xs mt-1 text-center text-white">Información General</span>
+                </div>
                 
-                <!-- Barra de progreso -->
-                <div class="flex items-center justify-between mb-6">
-                  <div class="flex flex-col items-center">
-                    <div class={"w-8 h-8 rounded-full flex items-center justify-center " <> 
-                      if(@current_step >= 1, do: "bg-[#144D85] text-white", else: "bg-gray-400 text-white")}>
-                      1
-                    </div>
-                    <span class="text-xs mt-1 text-center text-white">Información General</span>
+                <div class="flex-1 h-1 bg-gray-400 mx-2">
+                  <div class={"h-full " <> if(@current_step >= 2, do: "bg-[#144D85]", else: "bg-gray-400")}></div>
+                </div>
+                
+                <div class="flex flex-col items-center">
+                  <div class={"w-8 h-8 rounded-full flex items-center justify-center " <> 
+                    if(@current_step >= 2, do: "bg-[#144D85] text-white", else: "bg-gray-400 text-white")}>
+                    2
                   </div>
-                  
-                  <div class="flex-1 h-1 bg-gray-400 mx-2">
-                    <div class={"h-full " <> if(@current_step >= 2, do: "bg-[#144D85]", else: "bg-gray-400")}></div>
+                  <span class="text-xs mt-1 text-center text-white">Datos de Participantes</span>
+                </div>
+                
+                <div class="flex-1 h-1 bg-gray-400 mx-2">
+                  <div class={"h-full " <> if(@current_step >= 3, do: "bg-[#144D85]", else: "bg-gray-400")}></div>
+                </div>
+                
+                <div class="flex flex-col items-center">
+                  <div class={"w-8 h-8 rounded-full flex items-center justify-center " <> 
+                    if(@current_step >= 3, do: "bg-[#144D85] text-white", else: "bg-gray-400 text-white")}>
+                    3
                   </div>
-                  
-                  <div class="flex flex-col items-center">
-                    <div class={"w-8 h-8 rounded-full flex items-center justify-center " <> 
-                      if(@current_step >= 2, do: "bg-[#144D85] text-white", else: "bg-gray-400 text-white")}>
-                      2
-                    </div>
-                    <span class="text-xs mt-1 text-center text-white">Datos de Participantes</span>
-                  </div>
-                  
-                  <div class="flex-1 h-1 bg-gray-400 mx-2">
-                    <div class={"h-full " <> if(@current_step >= 3, do: "bg-[#144D85]", else: "bg-gray-400")}></div>
-                  </div>
-                  
-                  <div class="flex flex-col items-center">
-                    <div class={"w-8 h-8 rounded-full flex items-center justify-center " <> 
-                      if(@current_step >= 3, do: "bg-[#144D85] text-white", else: "bg-gray-400 text-white")}>
-                      3
-                    </div>
-                    <span class="text-xs mt-1 text-center text-white">Resumen</span>
-                  </div>
+                  <span class="text-xs mt-1 text-center text-white">Resumen</span>
                 </div>
               </div>
+            </div>
 
-              <!-- Contenido del paso actual -->
-              <div class="step-content">
-                <%= case @current_step do %>
-                  <% 1 -> %>
-                    <%= render_step1(assigns) %>
-                  <% 2 -> %>
-                    <%= render_step2(assigns) %>
-                  <% 3 -> %>
-                    <%= render_step3(assigns) %>
-                <% end %>
-              </div>
+            <!-- Contenido del paso actual -->
+            <div class="step-content">
+              <%= case @current_step do %>
+                <% 1 -> %>
+                  <%= render_step1(assigns) %>
+                <% 2 -> %>
+                  <%= render_step2(assigns) %>
+                <% 3 -> %>
+                  <%= render_step3(assigns) %>
+              <% end %>
             </div>
-          <% else %>
-            <!-- Vista de éxito -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-              <h1 class="text-3xl font-bold mb-4 text-[#144D85]">¡Inscripción completa!</h1>
-              <p class="text-green-600">Tus participantes han sido registrados exitosamente.</p>
-            </div>
-          <% end %>
+          </div>
+        <% else %>
+          <!-- Vista de éxito -->
+          <div class="bg-white rounded-lg shadow-lg p-6">
+            <h1 class="text-3xl font-bold mb-4 text-[#144D85]">¡Inscripción completa!</h1>
+            <p class="text-green-600">Tus participantes han sido registrados exitosamente.</p>
+          </div>
         <% end %>
       </div>
     </div>
@@ -350,9 +346,12 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
             type="text" 
             name="registration[institucion]" 
             value={@registration_data.institucion}
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+            class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] " <> if(Map.get(@errors, :institucion), do: "border-red-500", else: "border-gray-300")}
             required
           />
+          <%= if error = Map.get(@errors, :institucion) do %>
+            <p class="text-sm text-red-600 mt-1"><%= error %></p>
+          <% end %>
         </div>
 
         <div>
@@ -363,18 +362,24 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
             value={@registration_data.cantidad_personas}
             min="1" 
             max="50"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+            class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] " <> if(Map.get(@errors, :cantidad_personas), do: "border-red-500", else: "border-gray-300")}
             required
           />
           <p class="text-sm text-gray-500 mt-1">Indica cuántas personas se registrarán en esta inscripción</p>
+          <%= if error = Map.get(@errors, :cantidad_personas) do %>
+            <p class="text-sm text-red-600 mt-1"><%= error %></p>
+          <% end %>
         </div>
 
         <div class="mt-6">
           <label class="block text-gray-700 font-medium mb-2">Comprobante de pago <span class="text-red-500">*</span></label>
           <.live_file_input upload={@uploads.comprobante_pago} 
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+            class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] " <> if(Map.get(@errors, :comprobante_pago), do: "border-red-500", else: "border-gray-300")}
           />
           <p class="text-sm text-gray-500 mt-1">Adjunta el comprobante de pago (JPG, PNG, PDF, máximo 10MB)</p>
+          <%= if error = Map.get(@errors, :comprobante_pago) do %>
+            <p class="text-sm text-red-600 mt-1"><%= error %></p>
+          <% end %>
           <div :for={err <- upload_errors(@uploads.comprobante_pago)} class="text-sm text-red-600 mt-1"><%= err %></div>
         </div>
 
@@ -413,9 +418,12 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
                     type="text" 
                     name="participante[nombre_completo]" 
                     value={participante.nombre_completo}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                    class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] " <> if(Map.get(@errors, String.to_atom("participante_#{index}_nombre_completo")), do: "border-red-500", else: "border-gray-300")}
                     required
                   />
+                  <%= if error = Map.get(@errors, String.to_atom("participante_#{index}_nombre_completo")) do %>
+                    <p class="text-sm text-red-600 mt-1"><%= error %></p>
+                  <% end %>
                 </div>
 
                 <div>
@@ -424,9 +432,12 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
                     type="text" 
                     name="participante[numero_documento]" 
                     value={participante.numero_documento}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                    class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] " <> if(Map.get(@errors, String.to_atom("participante_#{index}_numero_documento")), do: "border-red-500", else: "border-gray-300")}
                     required
                   />
+                  <%= if error = Map.get(@errors, String.to_atom("participante_#{index}_numero_documento")) do %>
+                    <p class="text-sm text-red-600 mt-1"><%= error %></p>
+                  <% end %>
                 </div>
               </div>
 
@@ -437,9 +448,12 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
                     type="email" 
                     name="participante[email]" 
                     value={participante.email}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                    class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] " <> if(Map.get(@errors, String.to_atom("participante_#{index}_email")), do: "border-red-500", else: "border-gray-300")}
                     required
                   />
+                  <%= if error = Map.get(@errors, String.to_atom("participante_#{index}_email")) do %>
+                    <p class="text-sm text-red-600 mt-1"><%= error %></p>
+                  <% end %>
                   <p class="text-sm text-gray-500 mt-1">Es importante que proporciones un email válido, ya que allí recibirás tus credenciales y otros datos importantes.</p>
                 </div>
 
@@ -469,7 +483,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
                 <label class="block text-gray-700 font-medium mb-2">Categoría de participante <span class="text-red-500">*</span></label>
                 <select 
                   name="participante[category_id]" 
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                  class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] " <> if(Map.get(@errors, String.to_atom("participante_#{index}_category_id")), do: "border-red-500", else: "border-gray-300")}
                   value={participante.category_id}
                   required
                 >
@@ -478,6 +492,9 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
                     <option value={category.id} selected={participante.category_id == category.id}><%= category.nombre %></option>
                   <% end %>
                 </select>
+                <%= if error = Map.get(@errors, String.to_atom("participante_#{index}_category_id")) do %>
+                  <p class="text-sm text-red-600 mt-1"><%= error %></p>
+                <% end %>
               </div>
             </form>
           </div>
