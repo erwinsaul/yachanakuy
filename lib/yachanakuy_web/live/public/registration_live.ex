@@ -42,11 +42,35 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
 
   def handle_event("next_step", _params, socket) do
     current_step = socket.assigns.current_step
-    new_step = current_step + 1
-
-    socket = assign(socket, current_step: new_step)
-
-    {:noreply, socket}
+    
+    case current_step do
+      1 -> 
+        # Validar Paso 1
+        registration_data = socket.assigns.registration_data
+        if registration_data.institucion != "" and registration_data.cantidad_personas > 0 and has_comprobante_pago?(socket) do
+          new_step = current_step + 1
+          socket = assign(socket, current_step: new_step)
+          {:noreply, socket}
+        else
+          socket = assign(socket, error: "Por favor completa todos los campos requeridos en el Paso 1.")
+          {:noreply, socket}
+        end
+      2 -> 
+        # Validar Paso 2
+        registration_data = socket.assigns.registration_data
+        if validate_participantes_data(registration_data) do
+          new_step = current_step + 1
+          socket = assign(socket, current_step: new_step)
+          {:noreply, socket}
+        else
+          socket = assign(socket, error: "Por favor completa todos los campos requeridos para cada participante en el Paso 2.")
+          {:noreply, socket}
+        end
+      _ ->
+        new_step = current_step + 1
+        socket = assign(socket, current_step: new_step)
+        {:noreply, socket}
+    end
   end
 
   def handle_event("prev_step", _params, socket) do
@@ -58,6 +82,25 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     {:noreply, socket}
   end
 
+  defp has_comprobante_pago?(socket) do
+    # Verificar si hay un archivo subido o si ya se había subido previamente
+    comprobante_pago = socket.assigns.registration_data.comprobante_pago
+    length(socket.assigns.uploads.comprobante_pago.entries) > 0 or comprobante_pago != nil
+  end
+
+  defp validate_participantes_data(registration_data) do
+    # Verificar que cada participante tenga los campos requeridos
+    required_fields = [:nombre_completo, :numero_documento, :email, :category_id]
+    
+    registration_data.participantes
+    |> Enum.all?(fn participante ->
+      Enum.all?(required_fields, fn field ->
+        value = Map.get(participante, field)
+        value != nil and value != ""
+      end)
+    end)
+  end
+
   def handle_event("update_registration_data", %{"registration" => params}, socket) do
     registration_data = socket.assigns.registration_data
 
@@ -66,35 +109,54 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
       |> Map.put(:institucion, Map.get(params, "institucion", ""))
       |> Map.put(:cantidad_personas, String.to_integer(Map.get(params, "cantidad_personas", "1")))
 
+    # Ajustar la longitud de la lista de participantes según la cantidad
+    participantes = adjust_participantes_list(updated_registration_data.participantes, updated_registration_data.cantidad_personas)
+
+    updated_registration_data = Map.put(updated_registration_data, :participantes, participantes)
+    
     socket = assign(socket, registration_data: updated_registration_data)
 
     {:noreply, socket}
   end
 
-  def handle_event("update_participantes_data", %{"participantes" => params}, socket) do
-    participantes = for {key, value} <- params, into: %{} do
-      {String.to_integer(key), value}
-    end
+  def handle_event("update_participante_data", %{"participante_index" => index_str, "participante" => params}, socket) do
+    index = String.to_integer(index_str)
+    participante_data = %{
+      nombre_completo: Map.get(params, "nombre_completo", ""),
+      numero_documento: Map.get(params, "numero_documento", ""),
+      email: Map.get(params, "email", ""),
+      telefono: Map.get(params, "telefono", ""),
+      foto: Map.get(params, "foto", ""),
+      category_id: Map.get(params, "category_id", "")
+    }
 
-    # Convertir el mapa a una lista de participantes
-    sorted_participantes = 
-      participantes
-      |> Enum.sort_by(fn {index, _data} -> index end)
-      |> Enum.map(fn {_index, data} -> 
-        %{
-          nombre_completo: Map.get(data, "nombre_completo", ""),
-          numero_documento: Map.get(data, "numero_documento", ""),
-          email: Map.get(data, "email", ""),
-          telefono: Map.get(data, "telefono", ""),
-          foto: Map.get(data, "foto", ""),
-          category_id: Map.get(data, "category_id", nil)
-        }
-      end)
-
-    registration_data = Map.put(socket.assigns.registration_data, :participantes, sorted_participantes)
-    socket = assign(socket, registration_data: registration_data)
+    registration_data = socket.assigns.registration_data
+    updated_participantes = List.update_at(registration_data.participantes, index, fn _ -> participante_data end)
+    updated_registration_data = Map.put(registration_data, :participantes, updated_participantes)
+    
+    socket = assign(socket, registration_data: updated_registration_data)
 
     {:noreply, socket}
+  end
+
+  defp adjust_participantes_list(participantes, cantidad_personas) do
+    current_length = length(participantes)
+    
+    if current_length < cantidad_personas do
+      # Agregar participantes vacíos
+      empty_participante = %{
+        nombre_completo: "",
+        numero_documento: "",
+        email: "",
+        telefono: "",
+        foto: "",
+        category_id: ""
+      }
+      participantes ++ List.duplicate(empty_participante, cantidad_personas - current_length)
+    else
+      # Quitar participantes extras
+      Enum.take(participantes, cantidad_personas)
+    end
   end
 
   def handle_event("register_attendees", _params, socket) do
@@ -152,7 +214,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
 
   def render(assigns) do
     ~H"""
-    <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
+    <div class="min-h-screen bg-gradient-to-br from-blue-900 to-indigo-900 py-8">
       <div class="container mx-auto px-4 py-8 max-w-4xl">
         <%= if @error do %>
           <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
@@ -160,7 +222,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
           </div>
         <% else %>
           <%= if @current_step do %>
-            <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="bg-white rounded-lg shadow-lg p-6">
               <!-- Indicador de pasos -->
               <div class="mb-8">
                 <h1 class="text-3xl font-bold mb-4 text-[#144D85]">Formulario de Inscripción</h1>
@@ -169,34 +231,34 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
                 <div class="flex items-center justify-between mb-6">
                   <div class="flex flex-col items-center">
                     <div class={"w-8 h-8 rounded-full flex items-center justify-center " <> 
-                      if(@current_step >= 1, do: "bg-[#144D85] text-white", else: "bg-gray-200 text-gray-500")}>
+                      if(@current_step >= 1, do: "bg-[#144D85] text-white", else: "bg-gray-400 text-white")}>
                       1
                     </div>
-                    <span class="text-xs mt-1 text-center">Información General</span>
+                    <span class="text-xs mt-1 text-center text-white">Información General</span>
                   </div>
                   
-                  <div class="flex-1 h-1 bg-gray-200 mx-2">
-                    <div class={"h-full " <> if(@current_step >= 2, do: "bg-[#144D85]", else: "bg-gray-200")}></div>
+                  <div class="flex-1 h-1 bg-gray-400 mx-2">
+                    <div class={"h-full " <> if(@current_step >= 2, do: "bg-[#144D85]", else: "bg-gray-400")}></div>
                   </div>
                   
                   <div class="flex flex-col items-center">
                     <div class={"w-8 h-8 rounded-full flex items-center justify-center " <> 
-                      if(@current_step >= 2, do: "bg-[#144D85] text-white", else: "bg-gray-200 text-gray-500")}>
+                      if(@current_step >= 2, do: "bg-[#144D85] text-white", else: "bg-gray-400 text-white")}>
                       2
                     </div>
-                    <span class="text-xs mt-1 text-center">Datos de Participantes</span>
+                    <span class="text-xs mt-1 text-center text-white">Datos de Participantes</span>
                   </div>
                   
-                  <div class="flex-1 h-1 bg-gray-200 mx-2">
-                    <div class={"h-full " <> if(@current_step >= 3, do: "bg-[#144D85]", else: "bg-gray-200")}></div>
+                  <div class="flex-1 h-1 bg-gray-400 mx-2">
+                    <div class={"h-full " <> if(@current_step >= 3, do: "bg-[#144D85]", else: "bg-gray-400")}></div>
                   </div>
                   
                   <div class="flex flex-col items-center">
                     <div class={"w-8 h-8 rounded-full flex items-center justify-center " <> 
-                      if(@current_step >= 3, do: "bg-[#144D85] text-white", else: "bg-gray-200 text-gray-500")}>
+                      if(@current_step >= 3, do: "bg-[#144D85] text-white", else: "bg-gray-400 text-white")}>
                       3
                     </div>
-                    <span class="text-xs mt-1 text-center">Resumen</span>
+                    <span class="text-xs mt-1 text-center text-white">Resumen</span>
                   </div>
                 </div>
               </div>
@@ -215,7 +277,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
             </div>
           <% else %>
             <!-- Vista de éxito -->
-            <div class="bg-white rounded-lg shadow-md p-6">
+            <div class="bg-white rounded-lg shadow-lg p-6">
               <h1 class="text-3xl font-bold mb-4 text-[#144D85]">¡Inscripción completa!</h1>
               <p class="text-green-600">Tus participantes han sido registrados exitosamente.</p>
             </div>
@@ -287,84 +349,88 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
       <h2 class="text-xl font-semibold mb-4 text-[#144D85]">Paso 2: Datos de los Participantes</h2>
       <p class="text-gray-600 mb-6">Ingresa los datos de las <%= @registration_data.cantidad_personas %> persona(s) a registrar.</p>
       
-      <form phx-change="update_participantes_data" class="space-y-6">
-        <%= for index <- 0..(@registration_data.cantidad_personas - 1) do %>
+      <div class="space-y-6">
+        <%= for {participante, index} <- Enum.with_index(@registration_data.participantes) do %>
           <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
             <h3 class="text-lg font-medium mb-3 text-[#144D85]">Participante <%= index + 1 %></h3>
             
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form phx-change={"update_participante_data"} phx-target={index} class="space-y-4">
+              <input type="hidden" name="participante_index" value={index} />
+              
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-gray-700 font-medium mb-2">Nombre completo <span class="text-red-500">*</span></label>
+                  <input 
+                    type="text" 
+                    name="participante[nombre_completo]" 
+                    value={participante.nombre_completo}
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label class="block text-gray-700 font-medium mb-2">Número de documento <span class="text-red-500">*</span></label>
+                  <input 
+                    type="text" 
+                    name="participante[numero_documento]" 
+                    value={participante.numero_documento}
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-gray-700 font-medium mb-2">Email <span class="text-red-500">*</span></label>
+                  <input 
+                    type="email" 
+                    name="participante[email]" 
+                    value={participante.email}
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                    required
+                  />
+                  <p class="text-sm text-gray-500 mt-1">Es importante que proporciones un email válido, ya que allí recibirás tus credenciales y otros datos importantes.</p>
+                </div>
+
+                <div>
+                  <label class="block text-gray-700 font-medium mb-2">Teléfono</label>
+                  <input 
+                    type="text" 
+                    name="participante[telefono]" 
+                    value={participante.telefono}
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label class="block text-gray-700 font-medium mb-2">Nombre completo <span class="text-red-500">*</span></label>
+                <label class="block text-gray-700 font-medium mb-2">Foto (opcional)</label>
                 <input 
                   type="text" 
-                  name={"participantes[#{index}][nombre_completo]"} 
-                  value={get_participante_field(@registration_data.participantes, index, :nombre_completo)}
+                  name="participante[foto]" 
+                  value={participante.foto}
                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
-                  required
+                  placeholder="URL de la foto o dejar vacío"
                 />
               </div>
 
               <div>
-                <label class="block text-gray-700 font-medium mb-2">Número de documento <span class="text-red-500">*</span></label>
-                <input 
-                  type="text" 
-                  name={"participantes[#{index}][numero_documento]"} 
-                  value={get_participante_field(@registration_data.participantes, index, :numero_documento)}
+                <label class="block text-gray-700 font-medium mb-2">Categoría de participante <span class="text-red-500">*</span></label>
+                <select 
+                  name="participante[category_id]" 
                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                  value={participante.category_id}
                   required
-                />
+                >
+                  <option value="">Selecciona una categoría</option>
+                  <%= for category <- @categories do %>
+                    <option value={category.id} selected={participante.category_id == category.id}><%= category.nombre %></option>
+                  <% end %>
+                </select>
               </div>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              <div>
-                <label class="block text-gray-700 font-medium mb-2">Email <span class="text-red-500">*</span></label>
-                <input 
-                  type="email" 
-                  name={"participantes[#{index}][email]"} 
-                  value={get_participante_field(@registration_data.participantes, index, :email)}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
-                  required
-                />
-                <p class="text-sm text-gray-500 mt-1">Es importante que proporciones un email válido, ya que allí recibirás tus credenciales y otros datos importantes.</p>
-              </div>
-
-              <div>
-                <label class="block text-gray-700 font-medium mb-2">Teléfono</label>
-                <input 
-                  type="text" 
-                  name={"participantes[#{index}][telefono]"} 
-                  value={get_participante_field(@registration_data.participantes, index, :telefono)}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
-                />
-              </div>
-            </div>
-
-            <div class="mt-4">
-              <label class="block text-gray-700 font-medium mb-2">Foto (opcional)</label>
-              <input 
-                type="text" 
-                name={"participantes[#{index}][foto]"} 
-                value={get_participante_field(@registration_data.participantes, index, :foto)}
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
-                placeholder="URL de la foto o dejar vacío"
-              />
-            </div>
-
-            <div class="mt-4">
-              <label class="block text-gray-700 font-medium mb-2">Categoría de participante <span class="text-red-500">*</span></label>
-              <select 
-                name={"participantes[#{index}][category_id]"} 
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
-                value={get_participante_field(@registration_data.participantes, index, :category_id)}
-                required
-              >
-                <option value="">Selecciona una categoría</option>
-                <%= for category <- @categories do %>
-                  <option value={category.id}><%= category.nombre %></option>
-                <% end %>
-              </select>
-            </div>
+            </form>
           </div>
         <% end %>
 
@@ -385,7 +451,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
             Siguiente
           </button>
         </div>
-      </form>
+      </div>
     </div>
     """
   end
@@ -468,13 +534,4 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     """
   end
 
-  defp get_participante_field(participantes, index, field) do
-    if length(participantes) > index do
-      participantes
-      |> Enum.at(index)
-      |> Map.get(field, "")
-    else
-      ""
-    end
-  end
 end
