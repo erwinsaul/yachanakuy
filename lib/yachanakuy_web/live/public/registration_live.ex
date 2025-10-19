@@ -128,8 +128,11 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
   defp validate_step2_field_errors(registration_data) do
     required_fields = [:nombre_completo, :numero_documento, :email, :category_id]
     
+    # Validar solo los participantes según la cantidad especificada
+    participantes_a_validar = Enum.take(registration_data.participantes, registration_data.cantidad_personas)
+    
     # Validar cada participante y acumular errores
-    registration_data.participantes
+    participantes_a_validar
     |> Enum.with_index
     |> Enum.reduce(%{}, fn {participante, index}, acc_errors ->
       missing_fields = Enum.filter(required_fields, fn field ->
@@ -155,13 +158,15 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
   def handle_event("update_registration_data", %{"registration" => params}, socket) do
     registration_data = socket.assigns.registration_data
 
+    new_cantidad_personas = String.to_integer(Map.get(params, "cantidad_personas", "1"))
+
     updated_registration_data = 
       registration_data
       |> Map.put(:institucion, Map.get(params, "institucion", ""))
-      |> Map.put(:cantidad_personas, String.to_integer(Map.get(params, "cantidad_personas", "1")))
+      |> Map.put(:cantidad_personas, new_cantidad_personas)
 
-    # Ajustar la longitud de la lista de participantes según la cantidad
-    participantes = adjust_participantes_list(updated_registration_data.participantes, updated_registration_data.cantidad_personas)
+    # Ajustar la longitud de la lista de participantes según la cantidad, preservando datos existentes
+    participantes = adjust_participantes_list(updated_registration_data.participantes, new_cantidad_personas)
 
     updated_registration_data = Map.put(updated_registration_data, :participantes, participantes)
     
@@ -182,7 +187,18 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     }
 
     registration_data = socket.assigns.registration_data
-    updated_participantes = List.update_at(registration_data.participantes, index, fn _ -> participante_data end)
+    
+    # Asegurar que no se exceda el índice de participantes
+    updated_participantes = 
+      if index < length(registration_data.participantes) do
+        List.update_at(registration_data.participantes, index, fn _ -> participante_data end)
+      else
+        # Si el índice está fuera de rango, actualizar la lista de participantes con el nuevo valor en el lugar correcto
+        # Primero asegurar que la lista tiene suficientes elementos
+        current_participantes = adjust_participantes_list(registration_data.participantes, max(length(registration_data.participantes), index + 1))
+        List.update_at(current_participantes, index, fn _ -> participante_data end)
+      end
+
     updated_registration_data = Map.put(registration_data, :participantes, updated_participantes)
     
     socket = assign(socket, registration_data: updated_registration_data)
@@ -194,7 +210,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     current_length = length(participantes)
     
     if current_length < cantidad_personas do
-      # Agregar participantes vacíos
+      # Agregar participantes vacíos al final
       empty_participante = %{
         nombre_completo: "",
         numero_documento: "",
@@ -205,7 +221,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
       }
       participantes ++ List.duplicate(empty_participante, cantidad_personas - current_length)
     else
-      # Quitar participantes extras
+      # Quitar participantes extras del final
       Enum.take(participantes, cantidad_personas)
     end
   end
