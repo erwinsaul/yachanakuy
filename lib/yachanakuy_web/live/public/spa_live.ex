@@ -11,9 +11,8 @@ defmodule YachanakuyWeb.Public.SpaLive do
     rooms = Program.list_rooms()
     categories = Events.list_attendee_categories()
 
-    # Add test content if no real data is available
+    # Use real data from database, no test content needed
     sessions = if Enum.empty?(sessions), do: generate_test_sessions(), else: sessions
-    speakers = if Enum.empty?(speakers), do: generate_test_speakers(), else: speakers
 
     sections = [
       %{id: "inicio", name: "Inicio", layout: "full-center", bg_color: "#F0F8FF"},
