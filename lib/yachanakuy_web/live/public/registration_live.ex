@@ -47,23 +47,27 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
       1 -> 
         # Validar Paso 1
         registration_data = socket.assigns.registration_data
-        if registration_data.institucion != "" and registration_data.cantidad_personas > 0 and has_comprobante_pago?(socket) do
+        errors = validate_step1_data(registration_data, socket)
+        if errors == [] do
           new_step = current_step + 1
-          socket = assign(socket, current_step: new_step)
+          socket = assign(socket, current_step: new_step, error: nil)  # Limpiar error
           {:noreply, socket}
         else
-          socket = assign(socket, error: "Por favor completa todos los campos requeridos en el Paso 1.")
+          error_message = Enum.join(errors, ", ")
+          socket = assign(socket, error: error_message)
           {:noreply, socket}
         end
       2 -> 
         # Validar Paso 2
         registration_data = socket.assigns.registration_data
-        if validate_participantes_data(registration_data) do
+        errors = validate_step2_data(registration_data)
+        if errors == [] do
           new_step = current_step + 1
-          socket = assign(socket, current_step: new_step)
+          socket = assign(socket, current_step: new_step, error: nil)  # Limpiar error
           {:noreply, socket}
         else
-          socket = assign(socket, error: "Por favor completa todos los campos requeridos para cada participante en el Paso 2.")
+          error_message = Enum.join(errors, ", ")
+          socket = assign(socket, error: error_message)
           {:noreply, socket}
         end
       _ ->
@@ -88,16 +92,61 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     length(socket.assigns.uploads.comprobante_pago.entries) > 0 or comprobante_pago != nil
   end
 
-  defp validate_participantes_data(registration_data) do
-    # Verificar que cada participante tenga los campos requeridos
+
+
+  defp validate_step1_data(registration_data, socket) do
+    errors = []
+    
+    errors = if registration_data.institucion == "" or is_nil(registration_data.institucion) do
+      errors ++ ["Falta completar el campo Institución"]
+    else
+      errors
+    end
+    
+    errors = if registration_data.cantidad_personas <= 0 do
+      errors ++ ["La cantidad de personas debe ser mayor a 0"]
+    else
+      errors
+    end
+    
+    errors = if not has_comprobante_pago?(socket) do
+      errors ++ ["Falta subir el comprobante de pago"]
+    else
+      errors
+    end
+    
+    errors
+  end
+
+  defp validate_step2_data(registration_data) do
     required_fields = [:nombre_completo, :numero_documento, :email, :category_id]
     
+    # Verificar que cada participante tenga los campos requeridos
     registration_data.participantes
-    |> Enum.all?(fn participante ->
-      Enum.all?(required_fields, fn field ->
+    |> Enum.with_index
+    |> Enum.reduce([], fn {participante, index}, acc_errors ->
+      missing_fields = Enum.filter(required_fields, fn field ->
         value = Map.get(participante, field)
-        value != nil and value != ""
+        is_nil(value) or value == ""
       end)
+      
+      if missing_fields != [] do
+        field_names = missing_fields
+        |> Enum.map(fn field -> 
+          case field do
+            :nombre_completo -> "Nombre completo"
+            :numero_documento -> "Número de documento"
+            :email -> "Email"
+            :category_id -> "Categoría"
+            _ -> Atom.to_string(field)
+          end
+        end)
+        |> Enum.join(", ")
+        
+        acc_errors ++ ["Participante #{index + 1}: falta(n) #{field_names}"]
+      else
+        acc_errors
+      end
     end)
   end
 
