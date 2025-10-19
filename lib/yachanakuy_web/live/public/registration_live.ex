@@ -135,23 +135,39 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     participantes_a_validar
     |> Enum.with_index
     |> Enum.reduce(%{}, fn {participante, index}, acc_errors ->
-      missing_fields = Enum.filter(required_fields, fn field ->
-        value = Map.get(participante, field)
-        is_nil(value) or value == ""
-      end)
-      
-      # Agregar errores para cada campo faltante
-      Enum.reduce(missing_fields, acc_errors, fn field, inner_errors ->
-        field_key = "participante_#{index}_#{field}" |> String.to_atom()
-        error_msg = case field do
-          :nombre_completo -> "Nombre completo es obligatorio"
-          :numero_documento -> "Número de documento es obligatorio"
-          :email -> "Email es obligatorio"
-          :category_id -> "Categoría es obligatoria"
-          _ -> "Este campo es obligatorio"
-        end
-        Map.put(inner_errors, field_key, error_msg)
-      end)
+      # Verificar si el participante existe y tiene campos
+      if participante && is_map(participante) do
+        missing_fields = Enum.filter(required_fields, fn field ->
+          value = Map.get(participante, field)
+          is_nil(value) or value == "" or (is_binary(value) and String.trim(value) == "")
+        end)
+        
+        # Agregar errores para cada campo faltante
+        Enum.reduce(missing_fields, acc_errors, fn field, inner_errors ->
+          field_key = "participante_#{index}_#{field}" |> String.to_atom()
+          error_msg = case field do
+            :nombre_completo -> "Nombre completo es obligatorio"
+            :numero_documento -> "Número de documento es obligatorio"
+            :email -> "Email es obligatorio"
+            :category_id -> "Categoría es obligatoria"
+            _ -> "Este campo es obligatorio"
+          end
+          Map.put(inner_errors, field_key, error_msg)
+        end)
+      else
+        # Si el participante no existe, registrar errores para todos los campos requeridos
+        Enum.reduce(required_fields, acc_errors, fn field, inner_errors ->
+          field_key = "participante_#{index}_#{field}" |> String.to_atom()
+          error_msg = case field do
+            :nombre_completo -> "Nombre completo es obligatorio"
+            :numero_documento -> "Número de documento es obligatorio"
+            :email -> "Email es obligatorio"
+            :category_id -> "Categoría es obligatoria"
+            _ -> "Este campo es obligatorio"
+          end
+          Map.put(inner_errors, field_key, error_msg)
+        end)
+      end
     end)
   end
 
@@ -178,12 +194,12 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
   def handle_event("update_participante_data", %{"participante_index" => index_str, "participante" => params}, socket) do
     index = String.to_integer(index_str)
     participante_data = %{
-      nombre_completo: Map.get(params, "nombre_completo", ""),
-      numero_documento: Map.get(params, "numero_documento", ""),
-      email: Map.get(params, "email", ""),
-      telefono: Map.get(params, "telefono", ""),
-      foto: Map.get(params, "foto", ""),
-      category_id: Map.get(params, "category_id", "")
+      nombre_completo: Map.get(params, "nombre_completo", "") |> String.trim(),
+      numero_documento: Map.get(params, "numero_documento", "") |> String.trim(),
+      email: Map.get(params, "email", "") |> String.trim(),
+      telefono: Map.get(params, "telefono", "") |> String.trim(),
+      foto: Map.get(params, "foto", "") |> String.trim(),
+      category_id: Map.get(params, "category_id", "") |> String.trim()
     }
 
     registration_data = socket.assigns.registration_data
@@ -210,7 +226,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     current_length = length(participantes)
     
     if current_length < cantidad_personas do
-      # Agregar participantes vacíos al final
+      # Agregar participantes vacíos al final, preservando los datos existentes
       empty_participante = %{
         nombre_completo: "",
         numero_documento: "",
@@ -221,7 +237,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
       }
       participantes ++ List.duplicate(empty_participante, cantidad_personas - current_length)
     else
-      # Quitar participantes extras del final
+      # Quitar participantes extras del final, pero mantener solo los primeros 'cantidad_personas'
       Enum.take(participantes, cantidad_personas)
     end
   end
