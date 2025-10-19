@@ -7,42 +7,76 @@ defmodule YachanakuyWeb.Admin.SpeakerLive do
     
     changeset = Program.change_speaker(%Yachanakuy.Program.Speaker{})
     
-    socket = assign(socket,
-      speakers: speakers,
-      changeset: changeset,
-      editing_speaker: nil,
-      page: "admin_speakers",
-      success_message: nil
-    )
+    socket = 
+      socket
+      |> assign(
+        speakers: speakers,
+        changeset: changeset,
+        editing_speaker: nil,
+        page: "admin_speakers",
+        success_message: nil
+      )
+      |> allow_upload(:photo,
+        accept: ~w(.jpg .jpeg .png .gif .webp),
+        max_entries: 1,
+        max_file_size: 5_000_000  # 5MB
+      )
 
     {:ok, socket}
   end
 
 	def handle_event("save", %{"speaker" => speaker_params}, socket) do
-	  result = if socket.assigns.editing_speaker do
-	    Program.update_speaker(socket.assigns.editing_speaker, speaker_params)
-	  else
-	    Program.create_speaker(speaker_params)
-	  end
+    # Procesar las subidas antes de intentar crear o actualizar
+    uploaded_files = consume_uploaded_entries(socket, :photo, fn (entry, _entry_data) ->
+      # Devolvemos la ruta temporal del archivo subido
+      %{path: entry.path, client_name: entry.client_name}
+    end)
 
-	  case result do
-	    {:ok, _speaker} ->
-	      speakers = Program.list_speakers_with_sessions()
-	      changeset = Program.change_speaker(%Yachanakuy.Program.Speaker{})
-	      
-	      socket = assign(socket,
-	        speakers: speakers,
-	        changeset: changeset,
-	        editing_speaker: nil,
-	        success_message: if(socket.assigns.editing_speaker, do: "Expositor actualizado", else: "Expositor creado") <> " exitosamente"
-	      )
-	      {:noreply, socket}
+    # Obtener el primer archivo subido si existe
+    photo_upload = case uploaded_files do
+      [%{path: path, client_name: _name} | _] -> 
+        # Devolver un struct similar al upload original para que funcione con nuestra lógica existente
+        %{filename: Path.basename(path), path: path}
+      [] -> nil
+    end
 
-	    {:error, %Ecto.Changeset{} = changeset} ->
-	      socket = assign(socket, changeset: changeset)
-	      {:noreply, socket}
-	  end
+    result = if socket.assigns.editing_speaker do
+      Program.update_speaker_with_photo(socket.assigns.editing_speaker, speaker_params, photo_upload)
+    else
+      Program.create_speaker_with_photo(speaker_params, photo_upload)
+    end
+
+    case result do
+      {:ok, _speaker} ->
+        speakers = Program.list_speakers_with_sessions()
+        changeset = Program.change_speaker(%Yachanakuy.Program.Speaker{})
+        
+        socket = socket
+        |> assign(
+          speakers: speakers,
+          changeset: changeset,
+          editing_speaker: nil,
+          success_message: if(socket.assigns.editing_speaker, do: "Expositor actualizado", else: "Expositor creado") <> " exitosamente"
+        )
+        |> allow_upload(:photo,
+          accept: ~w(.jpg .jpeg .png .gif .webp),
+          max_entries: 1,
+          max_file_size: 5_000_000
+        )
+        
+        {:noreply, socket}
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        socket = assign(socket, changeset: changeset)
+        |> allow_upload(:photo,
+          accept: ~w(.jpg .jpeg .png .gif .webp),
+          max_entries: 1,
+          max_file_size: 5_000_000
+        )
+        {:noreply, socket}
+    end
 	end
+
   def handle_event("edit", %{"id" => id}, socket) do
     speaker = Program.get_speaker!(String.to_integer(id))
     changeset = Program.change_speaker(speaker)
@@ -51,12 +85,18 @@ defmodule YachanakuyWeb.Admin.SpeakerLive do
       changeset: changeset,
       editing_speaker: speaker
     )
+    |> allow_upload(:photo,
+      accept: ~w(.jpg .jpeg .png .gif .webp),
+      max_entries: 1,
+      max_file_size: 5_000_000
+    )
+    
     {:noreply, socket}
   end
 
   def handle_event("delete", %{"id" => id}, socket) do
     speaker = Program.get_speaker!(String.to_integer(id))
-    {:ok, _} = Program.delete_speaker(speaker)
+    {:ok, _} = Program.delete_speaker_with_photo(speaker)
 
     speakers = Program.list_speakers_with_sessions()
     changeset = Program.change_speaker(%Yachanakuy.Program.Speaker{})
@@ -67,6 +107,12 @@ defmodule YachanakuyWeb.Admin.SpeakerLive do
       editing_speaker: nil,
       success_message: "Expositor eliminado exitosamente"
     )
+    |> allow_upload(:photo,
+      accept: ~w(.jpg .jpeg .png .gif .webp),
+      max_entries: 1,
+      max_file_size: 5_000_000
+    )
+    
     {:noreply, socket}
   end
 
@@ -77,7 +123,17 @@ defmodule YachanakuyWeb.Admin.SpeakerLive do
       changeset: changeset,
       editing_speaker: nil
     )
+    |> allow_upload(:photo,
+      accept: ~w(.jpg .jpeg .png .gif .webp),
+      max_entries: 1,
+      max_file_size: 5_000_000
+    )
+    
     {:noreply, socket}
+  end
+
+  def handle_event("cancel_upload", %{"ref" => ref}, socket) do
+    {:noreply, cancel_upload(socket, :photo, ref)}
   end
 
   def render(assigns) do
@@ -103,6 +159,7 @@ defmodule YachanakuyWeb.Admin.SpeakerLive do
               :let={f}
               for={@changeset}
               phx-submit="save"
+              phx-change="validate"
               class="space-y-4"
             >
               <div>
@@ -124,9 +181,44 @@ defmodule YachanakuyWeb.Admin.SpeakerLive do
               </div>
               
               <div>
-                <.input field={f[:foto]} type="text" label="URL de Foto" placeholder="https://ejemplo.com/foto.jpg"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                <label class="block text-sm font-medium text-gray-700 mb-1">Foto</label>
+                <.live_file_input
+                  upload={@uploads.photo}
+                  class="block w-full text-sm text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-md file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-[#144D85] file:text-white
+                    hover:file:bg-[#0d3a66]"
                 />
+                
+                <div class="mt-2">
+                  <%= for entry <- @uploads.photo.entries do %>
+                    <div class="flex items-center justify-between p-2 bg-gray-100 rounded mb-1">
+                      <span class="text-sm truncate max-w-xs"><%= entry.client_name %></span>
+                      <button 
+                        type="button" 
+                        phx-click="cancel_upload" 
+                        phx-value-ref={entry.ref}
+                        class="ml-2 text-red-600 hover:text-red-800"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  <% end %>
+                  
+                  <!-- Mostrar vista previa si estamos editando y hay una foto existente -->
+                  <%= if @editing_speaker && @editing_speaker.foto do %>
+                    <div class="mt-2">
+                      <p class="text-sm text-gray-600 mb-1">Foto actual:</p>
+                      <img 
+                        src={if String.starts_with?(@editing_speaker.foto, "http"), do: @editing_speaker.foto, else: ~p"/#{@editing_speaker.foto}"} 
+                        alt="Foto actual del expositor" 
+                        class="w-16 h-16 object-cover rounded border"
+                      />
+                    </div>
+                  <% end %>
+                </div>
               </div>
               
               <div>

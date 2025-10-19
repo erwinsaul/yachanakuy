@@ -15,13 +15,13 @@ defmodule Yachanakuy.Uploads.Handler do
   
   ## Parámetros
   - upload: Upload struct de Phoenix
-  - type: Tipo de archivo ("foto", "comprobante_pago", "logo")
+  - type: Tipo de archivo ("foto", "comprobante_pago", "logo", "speaker")
   
   ## Ejemplo
       iex> Uploads.Handler.upload_image(upload, "foto")
       {:ok, "uploads/fotos/filename.jpg"}
   """
-  def upload_image(upload, type) when type in ["foto", "logo"] do
+  def upload_image(upload, type) when type in ["foto", "logo", "speaker"] do
     allowed_types = @allowed_image_types
     max_size = if type == "logo", do: @max_document_size, else: @max_image_size
     
@@ -123,6 +123,7 @@ defmodule Yachanakuy.Uploads.Handler do
   defp get_upload_directory("foto"), do: Path.join(@upload_path, "fotos")
   defp get_upload_directory("comprobante_pago"), do: Path.join(@upload_path, "comprobantes")
   defp get_upload_directory("logo"), do: Path.join(@upload_path, "logos")
+  defp get_upload_directory("speaker"), do: Path.join(@upload_path, "speakers")
   defp get_upload_directory(_), do: @upload_path
 
   defp create_directory_if_not_exists(directory) do

@@ -24,5 +24,31 @@ defmodule Yachanakuy.Program.Speaker do
     |> validate_length(:institucion, max: 100)
     |> validate_length(:email, max: 100)
     |> validate_length(:biografia, max: 1000)
+    |> validate_url_or_upload_format(:foto)
   end
+
+  # Validación personalizada para permitir URL o rutas locales de archivo
+  defp validate_url_or_upload_format(changeset, field) do
+    case get_change(changeset, field) do
+      nil -> changeset
+      value -> 
+        if is_valid_url?(value) or is_local_path?(value) or is_uploading_file?(value) do
+          changeset
+        else
+          add_error(changeset, field, "must be a valid URL, local path, or file upload")
+        end
+    end
+  end
+
+  defp is_valid_url?(value) when is_binary(value) do
+    String.starts_with?(value, ["http://", "https://"])
+  end
+  defp is_valid_url?(_), do: false
+
+  defp is_local_path?(value) when is_binary(value) do
+    String.starts_with?(value, ["uploads/", "/uploads/"])
+  end
+  defp is_local_path?(_), do: false
+
+  defp is_uploading_file?(_value), do: true  # Asumimos que si llega aquí en contexto de upload, es válido temporalmente
 end

@@ -66,6 +66,57 @@ defmodule Yachanakuy.Program do
     |> Repo.update()
   end
 
+  def create_speaker_with_photo(attrs \\ %{}, photo_upload \\ nil) do
+    # Si hay un archivo de foto para subir
+    case photo_upload do
+      nil -> 
+        create_speaker(attrs)
+      upload -> 
+        # Intentar subir la foto
+        case Yachanakuy.Uploads.Handler.upload_image(upload, "speaker") do
+          {:ok, photo_path} ->
+            # Agregar la ruta de la foto a los atributos
+            attrs_with_photo = Map.put(attrs, "foto", photo_path)
+            create_speaker(attrs_with_photo)
+          {:error, reason} ->
+            {:error, reason}
+        end
+    end
+  end
+
+  def update_speaker_with_photo(%Speaker{} = speaker, attrs, photo_upload \\ nil) do
+    # Si hay un archivo de foto para subir
+    case photo_upload do
+      nil -> 
+        update_speaker(speaker, attrs)
+      upload -> 
+        # Intentar subir la foto
+        case Yachanakuy.Uploads.Handler.upload_image(upload, "speaker") do
+          {:ok, photo_path} ->
+            # Agregar la ruta de la foto a los atributos
+            attrs_with_photo = Map.put(attrs, "foto", photo_path)
+            
+            # Si el speaker tenía una foto anterior, eliminarla
+            if speaker.foto && String.starts_with?(speaker.foto, "uploads/speakers/") do
+              Yachanakuy.Uploads.Handler.delete_file(speaker.foto)
+            end
+            
+            update_speaker(speaker, attrs_with_photo)
+          {:error, reason} ->
+            {:error, reason}
+        end
+    end
+  end
+
+  def delete_speaker_with_photo(%Speaker{} = speaker) do
+    # Eliminar la foto si existe
+    if speaker.foto && String.starts_with?(speaker.foto, "uploads/speakers/") do
+      Yachanakuy.Uploads.Handler.delete_file(speaker.foto)
+    end
+    
+    Repo.delete(speaker)
+  end
+
   def delete_speaker(%Speaker{} = speaker) do
     Repo.delete(speaker)
   end
