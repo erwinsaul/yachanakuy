@@ -15,22 +15,24 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     else
       categories = Events.list_attendee_categories()
 
-      changeset = Registration.change_attendee(%Yachanakuy.Registration.Attendee{})
-
       socket = socket
       |> assign(
-        changeset: changeset,
+        current_step: 1,
+        registration_data: %{
+          institucion: "",
+          comprobante_pago: nil,
+          cantidad_personas: 1,
+          participantes: []
+        },
         categories: categories,
         settings: settings,
         page: "inscripcion",
-        error: nil
-      )
-      |> allow_upload(:foto,
-        accept: ~w(.jpg .jpeg .png .gif .webp),
-        max_file_size: 5_000_000
+        error: nil,
+        success: nil
       )
       |> allow_upload(:comprobante_pago,
         accept: ~w(.jpg .jpeg .png .pdf),
+        max_entries: 1,
         max_file_size: 10_000_000
       )
 
@@ -38,144 +40,441 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     end
   end
 
-  def handle_event("save", %{"attendee" => attendee_params}, socket) do
-    # Procesar uploads de archivos
-    {foto_path, socket} = process_upload(socket, :foto, "fotos")
-    {comprobante_pago_path, socket} = process_upload(socket, :comprobante_pago, "comprobantes")
+  def handle_event("next_step", _params, socket) do
+    current_step = socket.assigns.current_step
+    new_step = current_step + 1
 
-    # Agregar las rutas de archivos al params
-    attendee_params = 
-      attendee_params
-      |> Map.put("foto", foto_path)
-      |> Map.put("comprobante_pago", comprobante_pago_path)
+    socket = assign(socket, current_step: new_step)
 
-    case Registration.create_attendee(attendee_params) do
-      {:ok, _attendee} ->
-        # Aquí iría la lógica para generar QR, token de descarga, etc.
-        # Por ahora solo redirigimos con un mensaje de éxito
-
-        socket = put_flash(socket, :info, "¡Inscripción completada exitosamente! Revisa tu correo para más instrucciones.")
-        {:noreply, push_navigate(socket, to: "/")}
-
-      {:error, %Ecto.Changeset{} = changeset} ->
-        socket = assign(socket, changeset: changeset)
-        {:noreply, socket}
-    end
+    {:noreply, socket}
   end
 
-  # Función para procesar uploads de archivos
-  defp process_upload(socket, field, upload_type) do
-    case consume_uploaded_entries(socket, field, fn _meta, entry ->
-          # Procesar archivo con el handler de uploads
-          case upload_type do
-            "fotos" -> 
-              Handler.upload_image(%{filename: Path.basename(entry.client_name), path: entry.path}, "foto")
-            "comprobantes" -> 
-              Handler.upload_document(%{filename: Path.basename(entry.client_name), path: entry.path}, "comprobante_pago")
-            _ -> 
-              {:error, "Tipo de archivo no válido"}
-          end
-        end) do
-      {[file_path], socket} -> {file_path, socket}
-      {[], socket} -> {nil, socket}  # No files were uploaded
-      _ -> {nil, socket}  # Error occurred
+  def handle_event("prev_step", _params, socket) do
+    current_step = socket.assigns.current_step
+    new_step = max(1, current_step - 1)
+
+    socket = assign(socket, current_step: new_step)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("update_registration_data", %{"registration" => params}, socket) do
+    registration_data = socket.assigns.registration_data
+
+    updated_registration_data = 
+      registration_data
+      |> Map.put(:institucion, Map.get(params, "institucion", ""))
+      |> Map.put(:cantidad_personas, String.to_integer(Map.get(params, "cantidad_personas", "1")))
+
+    socket = assign(socket, registration_data: updated_registration_data)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("update_participantes_data", %{"participantes" => params}, socket) do
+    participantes = for {key, value} <- params, into: %{} do
+      {String.to_integer(key), value}
+    end
+
+    # Convertir el mapa a una lista de participantes
+    sorted_participantes = 
+      participantes
+      |> Enum.sort_by(fn {index, _data} -> index end)
+      |> Enum.map(fn {_index, data} -> 
+        %{
+          nombre_completo: Map.get(data, "nombre_completo", ""),
+          numero_documento: Map.get(data, "numero_documento", ""),
+          email: Map.get(data, "email", ""),
+          telefono: Map.get(data, "telefono", ""),
+          foto: Map.get(data, "foto", ""),
+          category_id: Map.get(data, "category_id", nil)
+        }
+      end)
+
+    registration_data = Map.put(socket.assigns.registration_data, :participantes, sorted_participantes)
+    socket = assign(socket, registration_data: registration_data)
+
+    {:noreply, socket}
+  end
+
+  def handle_event("register_attendees", _params, socket) do
+    # Procesar el comprobante de pago
+    comprobante_pago_path = case consume_uploaded_entries(socket, :comprobante_pago, fn (entry, _entry_data) ->
+      Handler.upload_document(%{filename: Path.basename(entry.client_name), path: entry.path}, "comprobante_pago")
+    end) do
+      [{:ok, path} | _] -> path
+      _ -> nil
+    end
+
+    registration_data = socket.assigns.registration_data
+    updated_registration_data = Map.put(registration_data, :comprobante_pago, comprobante_pago_path)
+
+    # Registrar a todos los participantes
+    results = for participante <- updated_registration_data.participantes do
+      attendee_params = %{
+        nombre_completo: participante.nombre_completo,
+        numero_documento: participante.numero_documento,
+        email: participante.email,
+        telefono: participante.telefono,
+        institucion: updated_registration_data.institucion,
+        foto: participante.foto,
+        category_id: participante.category_id,
+        comprobante_pago: updated_registration_data.comprobante_pago,
+        estado: "pendiente_revision"
+      }
+
+      Registration.create_attendee(attendee_params)
+    end
+
+    # Verificar si todos se registraron correctamente
+    case Enum.find(results, fn {status, _} -> status == :error end) do
+      nil -> 
+        # Todos los registros fueron exitosos
+        socket = socket
+        |> assign(
+          success: "¡Inscripciones completadas exitosamente! Revisa tu correo para más instrucciones.",
+          current_step: nil
+        )
+        |> put_flash(:info, "¡Inscripciones completadas exitosamente! Revisa tu correo para más instrucciones.")
+        
+        {:noreply, push_navigate(socket, to: "/")}
+      _ -> 
+        # Hubo al menos un error
+        _error_changeset = 
+          results
+          |> Enum.find(fn {status, _} -> status == :error end)
+          |> elem(1)
+        
+        socket = assign(socket, error: "Hubo un error al registrar a uno o más participantes.")
+        {:noreply, socket}
     end
   end
 
   def render(assigns) do
     ~H"""
-    <div class="container mx-auto px-4 py-8 max-w-3xl">
-      <%= if @error do %>
-        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-          <%= @error %>
-        </div>
-      <% else %>
-        <h1 class="text-3xl font-bold mb-8 text-[#144D85]">Formulario de Inscripción</h1>
-
-        <div class="bg-white rounded-lg shadow-md p-6">
-          <.form
-            :let={f}
-            for={@changeset}
-            phx-submit="save"
-            class="space-y-4"
-          >
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <.input field={f[:nombre_completo]} type="text" label="Nombre completo" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]" />
+    <div class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8">
+      <div class="container mx-auto px-4 py-8 max-w-4xl">
+        <%= if @error do %>
+          <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+            <%= @error %>
+          </div>
+        <% else %>
+          <%= if @current_step do %>
+            <div class="bg-white rounded-lg shadow-md p-6">
+              <!-- Indicador de pasos -->
+              <div class="mb-8">
+                <h1 class="text-3xl font-bold mb-4 text-[#144D85]">Formulario de Inscripción</h1>
+                
+                <!-- Barra de progreso -->
+                <div class="flex items-center justify-between mb-6">
+                  <div class="flex flex-col items-center">
+                    <div class={"w-8 h-8 rounded-full flex items-center justify-center " <> 
+                      if(@current_step >= 1, do: "bg-[#144D85] text-white", else: "bg-gray-200 text-gray-500")}>
+                      1
+                    </div>
+                    <span class="text-xs mt-1 text-center">Información General</span>
+                  </div>
+                  
+                  <div class="flex-1 h-1 bg-gray-200 mx-2">
+                    <div class={"h-full " <> if(@current_step >= 2, do: "bg-[#144D85]", else: "bg-gray-200")}></div>
+                  </div>
+                  
+                  <div class="flex flex-col items-center">
+                    <div class={"w-8 h-8 rounded-full flex items-center justify-center " <> 
+                      if(@current_step >= 2, do: "bg-[#144D85] text-white", else: "bg-gray-200 text-gray-500")}>
+                      2
+                    </div>
+                    <span class="text-xs mt-1 text-center">Datos de Participantes</span>
+                  </div>
+                  
+                  <div class="flex-1 h-1 bg-gray-200 mx-2">
+                    <div class={"h-full " <> if(@current_step >= 3, do: "bg-[#144D85]", else: "bg-gray-200")}></div>
+                  </div>
+                  
+                  <div class="flex flex-col items-center">
+                    <div class={"w-8 h-8 rounded-full flex items-center justify-center " <> 
+                      if(@current_step >= 3, do: "bg-[#144D85] text-white", else: "bg-gray-200 text-gray-500")}>
+                      3
+                    </div>
+                    <span class="text-xs mt-1 text-center">Resumen</span>
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <.input field={f[:numero_documento]} type="text" label="Número de documento" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]" />
+              <!-- Contenido del paso actual -->
+              <div class="step-content">
+                <%= case @current_step do %>
+                  <% 1 -> %>
+                    <%= render_step1(assigns) %>
+                  <% 2 -> %>
+                    <%= render_step2(assigns) %>
+                  <% 3 -> %>
+                    <%= render_step3(assigns) %>
+                <% end %>
               </div>
             </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <.input field={f[:email]} type="email" label="Email" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]" />
-              </div>
-
-              <div>
-                <.input field={f[:telefono]} type="text" label="Teléfono" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]" />
-              </div>
+          <% else %>
+            <!-- Vista de éxito -->
+            <div class="bg-white rounded-lg shadow-md p-6">
+              <h1 class="text-3xl font-bold mb-4 text-[#144D85]">¡Inscripción completa!</h1>
+              <p class="text-green-600">Tus participantes han sido registrados exitosamente.</p>
             </div>
-
-            <div>
-              <.input field={f[:institucion]} type="text" label="Institución" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]" />
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <.input 
-                  field={f[:category_id]} 
-                  type="select" 
-                  label="Categoría de participante"
-                  options={[{"Selecciona una categoría", nil}] ++ Enum.map(@categories, fn cat -> {cat.nombre, cat.id} end)}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
-                />
-              </div>
-
-              <div>
-                <.input 
-                  field={f[:estado]} 
-                  type="select" 
-                  label="Estado"
-                  options={[{"Pendiente", "pendiente_revision"}]}
-                  value="pendiente_revision"
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label class="block text-gray-700 font-medium mb-2">Foto</label>
-              <.live_file_input upload={@uploads.foto} 
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
-              />
-              <p class="text-sm text-gray-500 mt-1">Sube una foto clara de tu rostro (JPG, PNG, máximo 5MB)</p>
-              <div :for={err <- upload_errors(@uploads.foto)} class="text-sm text-red-600 mt-1"><%= err %></div>
-            </div>
-
-            <div>
-              <label class="block text-gray-700 font-medium mb-2">Comprobante de pago</label>
-              <.live_file_input upload={@uploads.comprobante_pago} 
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
-              />
-              <p class="text-sm text-gray-500 mt-1">Adjunta el comprobante de pago (JPG, PNG, PDF, máximo 10MB)</p>
-              <div :for={err <- upload_errors(@uploads.comprobante_pago)} class="text-sm text-red-600 mt-1"><%= err %></div>
-            </div>
-
-            <div class="pt-4">
-              <button
-                type="submit"
-                class="w-full bg-[#144D85] hover:bg-[#0d3a66] text-white font-bold py-3 px-4 rounded-md transition duration-300"
-              >
-                Completar Inscripción
-              </button>
-            </div>
-          </.form>
-        </div>
-      <% end %>
+          <% end %>
+        <% end %>
+      </div>
     </div>
     """
+  end
+
+  defp render_step1(assigns) do
+    ~H"""
+    <div>
+      <h2 class="text-xl font-semibold mb-4 text-[#144D85]">Paso 1: Información General</h2>
+      <p class="text-gray-600 mb-6">Por favor, completa la información general de la inscripción.</p>
+      
+      <form phx-change="update_registration_data" class="space-y-4">
+        <div>
+          <label class="block text-gray-700 font-medium mb-2">Institución <span class="text-red-500">*</span></label>
+          <input 
+            type="text" 
+            name="registration[institucion]" 
+            value={@registration_data.institucion}
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+            required
+          />
+        </div>
+
+        <div>
+          <label class="block text-gray-700 font-medium mb-2">Cantidad de personas a registrar <span class="text-red-500">*</span></label>
+          <input 
+            type="number" 
+            name="registration[cantidad_personas]" 
+            value={@registration_data.cantidad_personas}
+            min="1" 
+            max="50"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+            required
+          />
+          <p class="text-sm text-gray-500 mt-1">Indica cuántas personas se registrarán en esta inscripción</p>
+        </div>
+
+        <div class="mt-6">
+          <label class="block text-gray-700 font-medium mb-2">Comprobante de pago <span class="text-red-500">*</span></label>
+          <.live_file_input upload={@uploads.comprobante_pago} 
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+          />
+          <p class="text-sm text-gray-500 mt-1">Adjunta el comprobante de pago (JPG, PNG, PDF, máximo 10MB)</p>
+          <div :for={err <- upload_errors(@uploads.comprobante_pago)} class="text-sm text-red-600 mt-1"><%= err %></div>
+        </div>
+
+        <div class="flex justify-end mt-8">
+          <button
+            type="button"
+            phx-click="next_step"
+            class="bg-[#144D85] hover:bg-[#0d3a66] text-white font-bold py-2 px-6 rounded-md transition duration-300"
+          >
+            Siguiente
+          </button>
+        </div>
+      </form>
+    </div>
+    """
+  end
+
+  defp render_step2(assigns) do
+    ~H"""
+    <div>
+      <h2 class="text-xl font-semibold mb-4 text-[#144D85]">Paso 2: Datos de los Participantes</h2>
+      <p class="text-gray-600 mb-6">Ingresa los datos de las <%= @registration_data.cantidad_personas %> persona(s) a registrar.</p>
+      
+      <form phx-change="update_participantes_data" class="space-y-6">
+        <%= for index <- 0..(@registration_data.cantidad_personas - 1) do %>
+          <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+            <h3 class="text-lg font-medium mb-3 text-[#144D85]">Participante <%= index + 1 %></h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-gray-700 font-medium mb-2">Nombre completo <span class="text-red-500">*</span></label>
+                <input 
+                  type="text" 
+                  name={"participantes[#{index}][nombre_completo]"} 
+                  value={get_participante_field(@registration_data.participantes, index, :nombre_completo)}
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                  required
+                />
+              </div>
+
+              <div>
+                <label class="block text-gray-700 font-medium mb-2">Número de documento <span class="text-red-500">*</span></label>
+                <input 
+                  type="text" 
+                  name={"participantes[#{index}][numero_documento]"} 
+                  value={get_participante_field(@registration_data.participantes, index, :numero_documento)}
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label class="block text-gray-700 font-medium mb-2">Email <span class="text-red-500">*</span></label>
+                <input 
+                  type="email" 
+                  name={"participantes[#{index}][email]"} 
+                  value={get_participante_field(@registration_data.participantes, index, :email)}
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                  required
+                />
+                <p class="text-sm text-gray-500 mt-1">Es importante que proporciones un email válido, ya que allí recibirás tus credenciales y otros datos importantes.</p>
+              </div>
+
+              <div>
+                <label class="block text-gray-700 font-medium mb-2">Teléfono</label>
+                <input 
+                  type="text" 
+                  name={"participantes[#{index}][telefono]"} 
+                  value={get_participante_field(@registration_data.participantes, index, :telefono)}
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                />
+              </div>
+            </div>
+
+            <div class="mt-4">
+              <label class="block text-gray-700 font-medium mb-2">Foto (opcional)</label>
+              <input 
+                type="text" 
+                name={"participantes[#{index}][foto]"} 
+                value={get_participante_field(@registration_data.participantes, index, :foto)}
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                placeholder="URL de la foto o dejar vacío"
+              />
+            </div>
+
+            <div class="mt-4">
+              <label class="block text-gray-700 font-medium mb-2">Categoría de participante <span class="text-red-500">*</span></label>
+              <select 
+                name={"participantes[#{index}][category_id]"} 
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                value={get_participante_field(@registration_data.participantes, index, :category_id)}
+                required
+              >
+                <option value="">Selecciona una categoría</option>
+                <%= for category <- @categories do %>
+                  <option value={category.id}><%= category.nombre %></option>
+                <% end %>
+              </select>
+            </div>
+          </div>
+        <% end %>
+
+        <div class="flex justify-between mt-8">
+          <button
+            type="button"
+            phx-click="prev_step"
+            class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-md transition duration-300"
+          >
+            Anterior
+          </button>
+          
+          <button
+            type="button"
+            phx-click="next_step"
+            class="bg-[#144D85] hover:bg-[#0d3a66] text-white font-bold py-2 px-6 rounded-md transition duration-300"
+          >
+            Siguiente
+          </button>
+        </div>
+      </form>
+    </div>
+    """
+  end
+
+  defp render_step3(assigns) do
+    ~H"""
+    <div>
+      <h2 class="text-xl font-semibold mb-4 text-[#144D85]">Paso 3: Resumen y Confirmación</h2>
+      <p class="text-gray-600 mb-6">Revisa los datos antes de completar la inscripción.</p>
+      
+      <div class="space-y-6">
+        <div class="border border-gray-200 rounded-lg p-4">
+          <h3 class="text-lg font-medium mb-3 text-[#144D85]">Información General</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p class="font-medium">Institución:</p>
+              <p><%= @registration_data.institucion %></p>
+            </div>
+            <div>
+              <p class="font-medium">Número de participantes:</p>
+              <p><%= @registration_data.cantidad_personas %></p>
+            </div>
+          </div>
+        </div>
+
+        <%= for {participante, index} <- Enum.with_index(@registration_data.participantes) do %>
+          <div class="border border-gray-200 rounded-lg p-4">
+            <h3 class="text-lg font-medium mb-3 text-[#144D85]">Participante <%= index + 1 %></h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <p class="font-medium">Nombre completo:</p>
+                <p><%= participante.nombre_completo %></p>
+              </div>
+              <div>
+                <p class="font-medium">Número de documento:</p>
+                <p><%= participante.numero_documento %></p>
+              </div>
+              <div>
+                <p class="font-medium">Email:</p>
+                <p><%= participante.email %></p>
+              </div>
+              <div>
+                <p class="font-medium">Teléfono:</p>
+                <p><%= participante.telefono %></p>
+              </div>
+              <div>
+                <p class="font-medium">Categoría:</p>
+                <p>
+                  <%= case Enum.find(@categories, fn c -> c.id == participante.category_id end) do %>
+                    <% nil -> %>
+                      <%= "No seleccionada" %>
+                    <% category -> %>
+                      <%= category.nombre %>
+                  <% end %>
+                </p>
+              </div>
+            </div>
+          </div>
+        <% end %>
+      </div>
+
+      <div class="flex justify-between mt-8">
+        <button
+          type="button"
+          phx-click="prev_step"
+          class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-6 rounded-md transition duration-300"
+        >
+          Anterior
+        </button>
+        
+        <button
+          type="button"
+          phx-click="register_attendees"
+          class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded-md transition duration-300"
+        >
+          Registrar Participantes
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  defp get_participante_field(participantes, index, field) do
+    if length(participantes) > index do
+      participantes
+      |> Enum.at(index)
+      |> Map.get(field, "")
+    else
+      ""
+    end
   end
 end
