@@ -83,7 +83,7 @@ defmodule YachanakuyWeb.Admin.SpeakerLive do
   def render(assigns) do
     ~H"""
     <div class="container mx-auto px-4 py-8">
-      <h1 class="text-3xl font-bold mb-8 text-[#144D85]">Gestión de Expositores</h1>
+      <h1 class="text-3xl font-bold mb-8 text-[#144D85]">Expositores</h1>
       
       <%= if @success_message do %>
         <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">

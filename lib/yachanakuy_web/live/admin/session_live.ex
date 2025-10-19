@@ -162,6 +162,7 @@ defmodule YachanakuyWeb.Admin.SessionLive do
               <div>
                 <.input field={f[:speaker_id]} type="select" label="Expositor"
                   options={[nil: "No asignado"] ++ for speaker <- @speakers, do: {speaker.nombre_completo, speaker.id}}
+                  prompt="Seleccione un Expositor"
                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
                 />
               </div>
