@@ -1,0 +1,192 @@
+# Layout System in Yachanakuy Application
+
+## Overview
+The Yachanakuy application uses a Phoenix LiveView layout system with two distinct layouts: public and admin (private). These layouts control the visual presentation and navigation structure for different user contexts.
+
+## Public Layout
+
+### Location
+- File: `/lib/yachanakuy_web/components/layouts/public.html.heex`
+- Used by: All public-facing routes
+
+### Structure
+```html
+<%= @inner_content %>
+<.flash_group flash={@flash} />
+```
+
+### Characteristics
+- **Minimal Design**: No navigation bars, headers, or sidebars
+- **Simple**: Only displays the main content of the page
+- **Purpose**: Designed for public access without any administrative interface
+- **Routes Using Public Layout**:
+  - `/` (home)
+  - `/programa` (program)
+  - `/expositores` (speakers)
+  - `/inscripcion` (registration)
+  - `/credencial/descargar` (credential download)
+  - `/credencial/:token` (credential download with token)
+  - `/certificado/solicitar` (certificate request)
+  - `/certificado/verificar` (certificate verification)
+
+## Admin (Private) Layout
+
+### Location
+- File: `/lib/yachanakuy_web/components/layouts/admin.html.heex`
+- Used by: All authenticated, role-based routes
+
+### Structure
+The admin layout is comprehensive and includes multiple sections:
+
+#### 1. Header/Navbar
+```html
+<header class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-50">
+```
+- Brand/Logo section with application name
+- Role indicator showing current user's role (Admin, Staff, Supervisor)
+- Right-side actions including:
+  - Mobile menu button
+  - Theme toggle (light/dark mode)
+  - User profile menu with dropdown
+
+#### 2. Navigation System
+The layout provides navigation based on user role:
+
+**Admin Navigation**:
+- Dashboard
+- Settings
+- Speakers
+- Rooms
+- Sessions
+- Attendees
+- Commissions
+- Deliveries
+- Public site link
+
+**Staff Navigation**:
+- Dashboard
+- Credential delivery
+- Material delivery
+- Meal delivery
+- Session attendance
+- My Activity
+
+**Supervisor Navigation**:
+- Dashboard
+- Commission summary
+- Operators management
+
+#### 3. Main Content Area
+```html
+<main class="flex-1 w-full">
+  <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
+    <%= @inner_content %>
+  </div>
+</main>
+```
+
+#### 4. Footer
+```html
+<footer class="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 mt-auto">
+```
+- Application branding
+- Copyright information
+- Technology attribution
+
+### Characteristics
+- **Full-Featured**: Includes navigation, user management, and administrative tools
+- **Role-Based**: Navigation menus change based on user role
+- **Responsive**: Adapts to mobile and desktop screens
+- **Themed**: Supports light and dark mode
+- **Interactive**: Dropdown menus and navigation options
+
+## How Layouts Are Assigned
+
+### Router Configuration
+In `/lib/yachanakuy_web/router.ex`, layouts are assigned through `live_session` blocks:
+
+#### Public Routes
+```elixir
+live_session :public, layout: {YachanakuyWeb.Layouts, :public} do
+  live "/", Public.SpaLive, :index
+  # ... other public routes
+end
+```
+
+#### Private Routes
+```elixir
+live_session :admin,
+  on_mount: [{YachanakuyWeb.UserAuth, :mount_current_user}],
+  layout: {YachanakuyWeb.Layouts, :admin} do
+  # ... admin routes
+end
+```
+
+```elixir
+live_session :staff,
+  on_mount: [{YachanakuyWeb.UserAuth, :mount_current_user}],
+  layout: {YachanakuyWeb.Layouts, :admin} do
+  # ... staff routes
+end
+```
+
+```elixir
+live_session :supervisor,
+  on_mount: [{YachanakuyWeb.UserAuth, :mount_current_user}],
+  layout: {YachanakuyWeb.Layouts, :admin} do
+  # ... supervisor routes
+end
+```
+
+## Current Scope Integration
+
+### User Context
+- The admin layout receives a `@current_scope` assign that contains user information
+- This includes user role data that determines which navigation options to display
+
+### Role-Based Navigation
+The navigation is dynamically generated based on the user's role:
+```
+cond do
+  @current_scope.user.rol == "admin" -> Admin navigation
+  @current_scope.user.rol == "operador" -> Staff navigation
+  @current_scope.user.rol == "encargado_comision" -> Supervisor navigation
+end
+```
+
+## Key Features of Each Layout
+
+### Public Layout Features
+- No authentication required
+- No navigation menus
+- Minimal styling
+- Focus on content presentation
+- Available to all visitors
+
+### Admin Layout Features
+- Authentication required
+- Comprehensive navigation system
+- User role identification
+- Theme selection (light/dark)
+- User profile management
+- Role-specific functionality access
+- Responsive design for all devices
+- Consistent branding and styling
+
+## Purpose and Benefits
+
+### Public Layout
+- Allows visitors to access event information without authentication
+- Provides a clean, uncluttered experience for first-time visitors
+- Optimizes for information presentation
+- Reduces cognitive load for users just browsing
+
+### Admin Layout
+- Provides comprehensive tools for event management
+- Allows role-based access control to different functionality
+- Maintains consistency across all administrative functions
+- Offers navigation between different management areas
+- Provides user feedback through flash messages
+- Supports multiple user roles in a single interface
+
+This layout system effectively separates public-facing content from administrative functionality while maintaining a consistent user experience within each context.

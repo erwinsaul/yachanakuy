@@ -1,0 +1,153 @@
+<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
+  <div class="w-full max-w-md">
+    <!-- Logo y Título -->
+    <div class="text-center mb-8">
+      <div class="mx-auto w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg mb-4">
+        <span class="text-white font-bold text-2xl">Y</span>
+      </div>
+      <h1 class="text-3xl font-bold text-gray-900 mb-2">
+        Iniciar Sesión
+      </h1>
+      <p class="text-sm text-gray-600">
+        <%= if @current_scope do %>
+          Necesitas reautenticarte para realizar acciones sensibles en tu cuenta.
+        <% else %>
+          ¿No tienes una cuenta? 
+          <.link
+            navigate={~p"/users/register"}
+            class="font-semibold text-blue-600 hover:text-blue-500 transition-colors"
+          >
+            Regístrate
+          </.link>
+          ahora.
+        <% end %>
+      </p>
+    </div>
+
+    <!-- Contenedor del formulario -->
+    <div class="bg-white shadow-2xl rounded-2xl p-8 space-y-6">
+      <!-- Alerta de desarrollo -->
+      <div 
+        :if={local_mail_adapter?()} 
+        class="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-lg flex items-start"
+      >
+        <.icon name="hero-information-circle" class="w-6 h-6 shrink-0 mr-3 mt-0.5 text-blue-600" />
+        <div class="text-sm">
+          <p class="font-semibold mb-1">Adaptador de correo local</p>
+          <p>
+            Para ver los correos enviados, visita 
+            <.link href="/dev/mailbox" class="underline font-medium hover:text-blue-900">
+              la página de buzón
+            </.link>.
+          </p>
+        </div>
+      </div>
+
+      <!-- Formulario de Login con Email (Magic Link) -->
+      <.form 
+        :let={f} 
+        for={@form} 
+        as={:user} 
+        id="login_form_magic" 
+        action={~p"/users/log-in"} 
+        class="space-y-4"
+      >
+        <div>
+          <.input
+            readonly={!!@current_scope}
+            field={f[:email]}
+            type="email"
+            label="Email"
+            placeholder="tu@email.com"
+            autocomplete="username"
+            required
+            phx-mounted={JS.focus()}
+          />
+        </div>
+        
+        <button 
+          type="submit" 
+          class="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+          </svg>
+          Iniciar sesión con email
+          <span aria-hidden="true">→</span>
+        </button>
+      </.form>
+
+      <!-- Separador -->
+      <div class="relative">
+        <div class="absolute inset-0 flex items-center">
+          <div class="w-full border-t border-gray-300"></div>
+        </div>
+        <div class="relative flex justify-center text-sm">
+          <span class="px-3 bg-white text-gray-500 font-medium">o continúa con</span>
+        </div>
+      </div>
+
+      <!-- Formulario de Login con Contraseña -->
+      <.form 
+        :let={f} 
+        for={@form} 
+        as={:user} 
+        id="login_form_password" 
+        action={~p"/users/log-in"} 
+        class="space-y-4"
+      >
+        <div>
+          <.input
+            readonly={!!@current_scope}
+            field={f[:email]}
+            type="email"
+            label="Email"
+            placeholder="tu@email.com"
+            autocomplete="username"
+            required
+          />
+        </div>
+        
+        <div>
+          <.input
+            field={f[:password]}
+            type="password"
+            label="Contraseña"
+            placeholder="••••••••"
+            autocomplete="current-password"
+          />
+        </div>
+
+        <div class="flex flex-col gap-3">
+          <button 
+            type="submit" 
+            name={@form[:remember_me].name} 
+            value="true" 
+            class="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+            </svg>
+            Iniciar sesión y mantenerme conectado
+            <span aria-hidden="true">→</span>
+          </button>
+          
+          <button 
+            type="submit" 
+            class="w-full flex items-center justify-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-semibold py-3 px-4 rounded-lg transition-colors duration-200 shadow-sm hover:shadow-md"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+            Iniciar sesión solo esta vez
+          </button>
+        </div>
+      </.form>
+    </div>
+
+    <!-- Footer -->
+    <p class="mt-8 text-center text-xs text-gray-500">
+      © <%= Calendar.strftime(Date.utc_today(), "%Y") %> Yachanakuy - Sistema de Gestión de Congresos
+    </p>
+  </div>
+</div>

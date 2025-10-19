@@ -1,0 +1,33 @@
+<div class="container mx-auto px-4 py-8 max-w-lg">
+  <div class="bg-white rounded-lg shadow-md p-6">
+    <div class="text-center mb-6">
+      <h1 class="text-3xl font-bold mb-2 text-[#144D85]">Registrar una cuenta</h1>
+      <p class="text-gray-600">
+        ¿Ya estás registrado?
+        <.link navigate={~p"/users/log-in"} class="font-semibold text-[#144D85] hover:underline">
+          Inicia sesión
+        </.link>
+        en tu cuenta ahora.
+      </p>
+    </div>
+
+    <.form :let={f} for={@changeset} action={~p"/users/register"} class="space-y-4">
+      <.input
+        field={f[:email]}
+        type="email"
+        label="Email"
+        autocomplete="username"
+        required
+        phx-mounted={JS.focus()}
+      />
+
+      <button
+        type="submit"
+        phx-disable-with="Creando cuenta..."
+        class="w-full bg-[#144D85] hover:bg-[#0d3a66] text-white font-bold py-2 px-4 rounded-md transition duration-300"
+      >
+        Crear una cuenta
+      </button>
+    </.form>
+  </div>
+</div>

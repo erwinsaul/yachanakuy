@@ -1,0 +1,75 @@
+<div class="container mx-auto px-4 py-8 max-w-lg">
+  <div class="bg-white rounded-lg shadow-md p-6">
+    <div class="text-center mb-6">
+      <h1 class="text-3xl font-bold mb-2 text-[#144D85]">Bienvenido <%= @user.email %></h1>
+    </div>
+
+    <.form
+      :if={!@user.confirmed_at}
+      for={@form}
+      id="confirmation_form"
+      action={~p"/users/log-in?_action=confirmed"}
+      phx-mounted={JS.focus_first()}
+      class="space-y-4"
+    >
+      <input type="hidden" name={@form[:token].name} value={@form[:token].value} />
+      <button
+        type="submit"
+        name={@form[:remember_me].name}
+        value="true"
+        phx-disable-with="Confirmando..."
+        class="w-full bg-[#144D85] hover:bg-[#0d3a66] text-white font-bold py-2 px-4 rounded-md transition duration-300"
+      >
+        Confirmar y mantenerme conectado
+      </button>
+      <button
+        type="submit"
+        phx-disable-with="Confirmando..."
+        class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md transition duration-300"
+      >
+        Confirmar e iniciar sesión solo esta vez
+      </button>
+    </.form>
+
+    <.form
+      :if={@user.confirmed_at}
+      for={@form}
+      id="login_form"
+      action={~p"/users/log-in"}
+      phx-mounted={JS.focus_first()}
+      class="space-y-4"
+    >
+      <input type="hidden" name={@form[:token].name} value={@form[:token].value} />
+      <%= if @current_scope do %>
+        <button
+          type="submit"
+          phx-disable-with="Iniciando sesión..."
+          class="w-full bg-[#144D85] hover:bg-[#0d3a66] text-white font-bold py-2 px-4 rounded-md transition duration-300"
+        >
+          Iniciar sesión
+        </button>
+      <% else %>
+        <button
+          type="submit"
+          name={@form[:remember_me].name}
+          value="true"
+          phx-disable-with="Iniciando sesión..."
+          class="w-full bg-[#144D85] hover:bg-[#0d3a66] text-white font-bold py-2 px-4 rounded-md transition duration-300"
+        >
+          Mantenerme conectado en este dispositivo
+        </button>
+        <button
+          type="submit"
+          phx-disable-with="Iniciando sesión..."
+          class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md transition duration-300"
+        >
+          Iniciar sesión solo esta vez
+        </button>
+      <% end %>
+    </.form>
+
+    <div :if={!@user.confirmed_at} class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded mt-8">
+      <p>Consejo: Si prefieres contraseñas, puedes habilitarlas en la configuración de usuario.</p>
+    </div>
+  </div>
+</div>

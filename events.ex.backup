@@ -1,0 +1,80 @@
+defmodule Yachanakuy.Events do
+  @moduledoc """
+  The Events context.
+  """
+  import Ecto.Query, warn: false
+  alias Yachanakuy.Repo
+
+  alias Yachanakuy.Events.Settings
+
+  def get_congress_settings do
+    case Repo.all(Settings) do
+      [settings | _] -> settings
+      [] -> nil
+    end
+  end
+
+  def get_congress_settings! do
+    case get_congress_settings() do
+      nil -> nil
+      settings -> settings
+    end
+  end
+
+  def create_settings(attrs \\ %{}) do
+    # Ensure we only ever have one settings record
+    case get_congress_settings() do
+      nil -> 
+        %Settings{}
+        |> Settings.changeset(attrs)
+        |> Repo.insert()
+      settings -> 
+        {:error, :singleton_exists}
+    end
+  end
+
+  def update_settings(%Settings{} = settings, attrs) do
+    settings
+    |> Settings.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_settings(%Settings{} = settings) do
+    Repo.delete(settings)
+  end
+
+  def change_settings(%Settings{} = settings, attrs \\ %{}) do
+    Settings.changeset(settings, attrs)
+  end
+end
+
+  alias Yachanakuy.Events.AttendeeCategory
+
+  def list_attendee_categories do
+    Repo.all(AttendeeCategory)
+  end
+
+  def get_attendee_category!(id) do
+    Repo.get!(AttendeeCategory, id)
+  end
+
+  def create_attendee_category(attrs \\ %{}) do
+    %AttendeeCategory{}
+    |> AttendeeCategory.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def update_attendee_category(%AttendeeCategory{} = attendee_category, attrs) do
+    attendee_category
+    |> AttendeeCategory.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_attendee_category(%AttendeeCategory{} = attendee_category) do
+    Repo.delete(attendee_category)
+  end
+
+  def change_attendee_category(%AttendeeCategory{} = attendee_category, attrs \\ %{}) do
+    AttendeeCategory.changeset(attendee_category, attrs)
+  end
+end
