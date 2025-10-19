@@ -346,7 +346,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
             type="text" 
             name="registration[institucion]" 
             value={@registration_data.institucion}
-            class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] " <> if(Map.get(@errors, :institucion), do: "border-red-500", else: "border-gray-300")}
+            class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] text-gray-900 " <> if(Map.get(@errors, :institucion), do: "border-red-500", else: "border-gray-300")}
             required
           />
           <%= if error = Map.get(@errors, :institucion) do %>
@@ -362,7 +362,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
             value={@registration_data.cantidad_personas}
             min="1" 
             max="50"
-            class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] " <> if(Map.get(@errors, :cantidad_personas), do: "border-red-500", else: "border-gray-300")}
+            class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] text-gray-900 " <> if(Map.get(@errors, :cantidad_personas), do: "border-red-500", else: "border-gray-300")}
             required
           />
           <p class="text-sm text-gray-500 mt-1">Indica cuántas personas se registrarán en esta inscripción</p>
@@ -374,7 +374,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
         <div class="mt-6">
           <label class="block text-gray-700 font-medium mb-2">Comprobante de pago <span class="text-red-500">*</span></label>
           <.live_file_input upload={@uploads.comprobante_pago} 
-            class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] " <> if(Map.get(@errors, :comprobante_pago), do: "border-red-500", else: "border-gray-300")}
+            class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] text-gray-900 " <> if(Map.get(@errors, :comprobante_pago), do: "border-red-500", else: "border-gray-300")}
           />
           <p class="text-sm text-gray-500 mt-1">Adjunta el comprobante de pago (JPG, PNG, PDF, máximo 10MB)</p>
           <%= if error = Map.get(@errors, :comprobante_pago) do %>
@@ -418,7 +418,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
                     type="text" 
                     name="participante[nombre_completo]" 
                     value={participante.nombre_completo}
-                    class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] " <> if(Map.get(@errors, String.to_atom("participante_#{index}_nombre_completo")), do: "border-red-500", else: "border-gray-300")}
+                    class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] text-gray-900 " <> if(Map.get(@errors, String.to_atom("participante_#{index}_nombre_completo")), do: "border-red-500", else: "border-gray-300")}
                     required
                   />
                   <%= if error = Map.get(@errors, String.to_atom("participante_#{index}_nombre_completo")) do %>
@@ -432,7 +432,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
                     type="text" 
                     name="participante[numero_documento]" 
                     value={participante.numero_documento}
-                    class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] " <> if(Map.get(@errors, String.to_atom("participante_#{index}_numero_documento")), do: "border-red-500", else: "border-gray-300")}
+                    class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] text-gray-900 " <> if(Map.get(@errors, String.to_atom("participante_#{index}_numero_documento")), do: "border-red-500", else: "border-gray-300")}
                     required
                   />
                   <%= if error = Map.get(@errors, String.to_atom("participante_#{index}_numero_documento")) do %>
@@ -448,7 +448,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
                     type="email" 
                     name="participante[email]" 
                     value={participante.email}
-                    class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] " <> if(Map.get(@errors, String.to_atom("participante_#{index}_email")), do: "border-red-500", else: "border-gray-300")}
+                    class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] text-gray-900 " <> if(Map.get(@errors, String.to_atom("participante_#{index}_email")), do: "border-red-500", else: "border-gray-300")}
                     required
                   />
                   <%= if error = Map.get(@errors, String.to_atom("participante_#{index}_email")) do %>
@@ -463,7 +463,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
                     type="text" 
                     name="participante[telefono]" 
                     value={participante.telefono}
-                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] text-gray-900"
                   />
                 </div>
               </div>
@@ -474,7 +474,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
                   type="text" 
                   name="participante[foto]" 
                   value={participante.foto}
-                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] text-gray-900"
                   placeholder="URL de la foto o dejar vacío"
                 />
               </div>
@@ -483,7 +483,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
                 <label class="block text-gray-700 font-medium mb-2">Categoría de participante <span class="text-red-500">*</span></label>
                 <select 
                   name="participante[category_id]" 
-                  class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] " <> if(Map.get(@errors, String.to_atom("participante_#{index}_category_id")), do: "border-red-500", else: "border-gray-300")}
+                  class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] text-gray-900 " <> if(Map.get(@errors, String.to_atom("participante_#{index}_category_id")), do: "border-red-500", else: "border-gray-300")}
                   value={participante.category_id}
                   required
                 >
