@@ -378,21 +378,31 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
 
     # Registrar solo los participantes según la cantidad especificada
     participantes_a_registrar = Enum.take(updated_registration_data.participantes, updated_registration_data.cantidad_personas)
+
+    # Log de debug
+    IO.inspect(participantes_a_registrar, label: "Participantes a registrar")
+    IO.inspect(comprobante_pago_path, label: "Comprobante de pago")
+
     results = for participante <- participantes_a_registrar do
       attendee_params = %{
         nombre_completo: participante.nombre_completo,
         numero_documento: participante.numero_documento,
         email: participante.email,
-        telefono: participante.telefono,
+        telefono: participante.telefono || "",
         institucion: updated_registration_data.institucion,
-        foto: participante.foto,
+        foto: participante.foto || "",
         category_id: participante.category_id,
         comprobante_pago: updated_registration_data.comprobante_pago,
         estado: "pendiente_revision"
       }
 
-      Registration.create_attendee(attendee_params)
+      IO.inspect(attendee_params, label: "Parámetros del participante")
+      result = Registration.create_attendee(attendee_params)
+      IO.inspect(result, label: "Resultado de create_attendee")
+      result
     end
+
+    IO.inspect(results, label: "Todos los resultados")
 
     # Verificar si todos se registraron correctamente
     case Enum.find(results, fn {status, _} -> status == :error end) do
@@ -693,55 +703,61 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     <div>
       <h2 class="text-xl font-semibold mb-4 text-[#144D85]">Paso 3: Resumen y Confirmación</h2>
       <p class="text-gray-600 mb-6">Revisa los datos antes de completar la inscripción.</p>
-      
+
       <div class="space-y-6">
         <div class="border border-gray-200 rounded-lg p-4">
           <h3 class="text-lg font-medium mb-3 text-[#144D85]">Información General</h3>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <p class="font-medium">Institución:</p>
-              <p><%= @registration_data.institucion %></p>
+              <p class="font-medium text-gray-700">Institución:</p>
+              <p class="text-gray-900"><%= @registration_data.institucion %></p>
             </div>
             <div>
-              <p class="font-medium">Número de participantes:</p>
-              <p><%= @registration_data.cantidad_personas %></p>
+              <p class="font-medium text-gray-700">Número de participantes:</p>
+              <p class="text-gray-900"><%= @registration_data.cantidad_personas %></p>
             </div>
           </div>
         </div>
 
-        <%= for {participante, index} <- Enum.with_index(@registration_data.participantes), index < @registration_data.cantidad_personas do %>
-          <div class="border border-gray-200 rounded-lg p-4">
-            <h3 class="text-lg font-medium mb-3 text-[#144D85]">Participante <%= index + 1 %></h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <p class="font-medium">Nombre completo:</p>
-                <p><%= participante.nombre_completo %></p>
-              </div>
-              <div>
-                <p class="font-medium">Número de documento:</p>
-                <p><%= participante.numero_documento %></p>
-              </div>
-              <div>
-                <p class="font-medium">Email:</p>
-                <p><%= participante.email %></p>
-              </div>
-              <div>
-                <p class="font-medium">Teléfono:</p>
-                <p><%= participante.telefono %></p>
-              </div>
-              <div>
-                <p class="font-medium">Categoría:</p>
-                <p>
-                  <%= case Enum.find(@categories, fn c -> c.id == participante.category_id end) do %>
-                    <% nil -> %>
-                      <%= "No seleccionada" %>
-                    <% category -> %>
-                      <%= category.nombre %>
-                  <% end %>
-                </p>
+        <%= for {participante, index} <- Enum.with_index(@registration_data.participantes) do %>
+          <%= if index < @registration_data.cantidad_personas do %>
+            <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+              <h3 class="text-lg font-medium mb-3 text-[#144D85]">Participante <%= index + 1 %></h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p class="font-medium text-gray-700">Nombre completo:</p>
+                  <p class="text-gray-900"><%= participante.nombre_completo || "No especificado" %></p>
+                </div>
+                <div>
+                  <p class="font-medium text-gray-700">Número de documento:</p>
+                  <p class="text-gray-900"><%= participante.numero_documento || "No especificado" %></p>
+                </div>
+                <div>
+                  <p class="font-medium text-gray-700">Email:</p>
+                  <p class="text-gray-900"><%= participante.email || "No especificado" %></p>
+                </div>
+                <div>
+                  <p class="font-medium text-gray-700">Teléfono:</p>
+                  <p class="text-gray-900"><%= if participante.telefono != "", do: participante.telefono, else: "No especificado" %></p>
+                </div>
+                <div>
+                  <p class="font-medium text-gray-700">Categoría:</p>
+                  <p class="text-gray-900">
+                    <%= if participante.category_id do %>
+                      <%= case Enum.find(@categories, fn c -> c.id == participante.category_id end) do %>
+                        <% nil -> %>
+                          No seleccionada
+                        <% category -> %>
+                          <%= category.nombre %>
+                      <% end %>
+                    <% else %>
+                      No seleccionada
+                    <% end %>
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          <% end %>
         <% end %>
       </div>
 
