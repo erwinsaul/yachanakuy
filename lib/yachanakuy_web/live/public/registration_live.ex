@@ -60,18 +60,22 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
           socket = assign(socket, errors: field_errors)
           {:noreply, socket}
         end
-      2 -> 
+      2 ->
         # Validar Paso 2 - registrar errores por campo
         registration_data = socket.assigns.registration_data
         field_errors = validate_step2_field_errors(registration_data)
-        
-        if map_size(field_errors) == 0 do
+        uniqueness_errors = validate_uniqueness_errors(registration_data)
+
+        # Combinar todos los errores
+        all_errors = Map.merge(field_errors, uniqueness_errors)
+
+        if map_size(all_errors) == 0 do
           new_step = current_step + 1
           socket = assign(socket, current_step: new_step, errors: %{})  # Limpiar errores
           {:noreply, socket}
         else
           # Si hay errores, mantener en el mismo paso y mostrar errores por campo
-          socket = assign(socket, errors: field_errors)
+          socket = assign(socket, errors: all_errors)
           {:noreply, socket}
         end
       _ ->
@@ -127,23 +131,35 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
 
   defp validate_step2_field_errors(registration_data) do
     required_fields = [:nombre_completo, :numero_documento, :email, :category_id]
-    
+
     # Validar solo los participantes según la cantidad especificada
     participantes_a_validar = Enum.take(registration_data.participantes, registration_data.cantidad_personas)
-    
+
     # Validar cada participante y acumular errores
     participantes_a_validar
     |> Enum.with_index
     |> Enum.reduce(%{}, fn {participante, index}, acc_errors ->
       # Verificar si el participante existe y tiene campos
       if participante && is_map(participante) do
+        # Validar todos los campos requeridos (siempre, no solo si has_some_data)
         missing_fields = Enum.filter(required_fields, fn field ->
           value = Map.get(participante, field)
           is_nil(value) or value == "" or (is_binary(value) and String.trim(value) == "")
         end)
-        
+
+        # Validar formato de email si está presente
+        email_errors = if participante.email && participante.email != "" do
+          if valid_email_format?(participante.email) do
+            []
+          else
+            [{:email, "Formato de email inválido"}]
+          end
+        else
+          []
+        end
+
         # Agregar errores para cada campo faltante
-        Enum.reduce(missing_fields, acc_errors, fn field, inner_errors ->
+        acc_errors = Enum.reduce(missing_fields, acc_errors, fn field, inner_errors ->
           field_key = "participante_#{index}_#{field}" |> String.to_atom()
           error_msg = case field do
             :nombre_completo -> "Nombre completo es obligatorio"
@@ -153,6 +169,12 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
             _ -> "Este campo es obligatorio"
           end
           Map.put(inner_errors, field_key, error_msg)
+        end)
+
+        # Agregar errores de formato de email
+        Enum.reduce(email_errors, acc_errors, fn {field, msg}, inner_errors ->
+          field_key = "participante_#{index}_#{field}" |> String.to_atom()
+          Map.put(inner_errors, field_key, msg)
         end)
       else
         # Si el participante no existe, registrar errores para todos los campos requeridos
@@ -171,12 +193,60 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     end)
   end
 
+  # Validar formato de email
+  defp valid_email_format?(email) do
+    Regex.match?(~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/, email)
+  end
+
+  # Traducir errores de upload a mensajes legibles
+  defp translate_upload_error(:too_large), do: "El archivo es demasiado grande (máximo 10MB)"
+  defp translate_upload_error(:not_accepted), do: "Tipo de archivo no permitido (solo JPG, PNG, PDF)"
+  defp translate_upload_error(:too_many_files), do: "Solo se permite un archivo"
+  defp translate_upload_error(error), do: "Error al subir archivo: #{error}"
+
+  # Validar unicidad de email y documento
+  defp validate_uniqueness_errors(registration_data) do
+    participantes_a_validar = Enum.take(registration_data.participantes, registration_data.cantidad_personas)
+
+    participantes_a_validar
+    |> Enum.with_index
+    |> Enum.reduce(%{}, fn {participante, index}, acc_errors ->
+      acc_errors = if participante.email && participante.email != "" do
+        case Registration.get_attendee_by_email(participante.email) do
+          nil -> acc_errors
+          _attendee ->
+            field_key = "participante_#{index}_email" |> String.to_atom()
+            Map.put(acc_errors, field_key, "Este email ya está registrado")
+        end
+      else
+        acc_errors
+      end
+
+      if participante.numero_documento && participante.numero_documento != "" do
+        case Registration.get_attendee_by_documento(participante.numero_documento) do
+          nil -> acc_errors
+          _attendee ->
+            field_key = "participante_#{index}_numero_documento" |> String.to_atom()
+            Map.put(acc_errors, field_key, "Este documento ya está registrado")
+        end
+      else
+        acc_errors
+      end
+    end)
+  end
+
   def handle_event("update_registration_data", %{"registration" => params}, socket) do
     registration_data = socket.assigns.registration_data
 
-    new_cantidad_personas = String.to_integer(Map.get(params, "cantidad_personas", "1"))
+    # Validar y limitar cantidad de personas (min: 1, max: 50)
+    new_cantidad_personas = case Integer.parse(Map.get(params, "cantidad_personas", "1")) do
+      {num, _} when num >= 1 and num <= 50 -> num
+      {num, _} when num < 1 -> 1
+      {num, _} when num > 50 -> 50
+      :error -> 1
+    end
 
-    updated_registration_data = 
+    updated_registration_data =
       registration_data
       |> Map.put(:institucion, Map.get(params, "institucion", ""))
       |> Map.put(:cantidad_personas, new_cantidad_personas)
@@ -185,7 +255,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     participantes = adjust_participantes_list(updated_registration_data.participantes, new_cantidad_personas)
 
     updated_registration_data = Map.put(updated_registration_data, :participantes, participantes)
-    
+
     socket = assign(socket, registration_data: updated_registration_data)
 
     {:noreply, socket}
@@ -193,27 +263,39 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
 
   def handle_event("update_participante_data", %{"participante_index" => index_str, "participante" => params}, socket) do
     index = String.to_integer(index_str)
+
+    # Convertir category_id a integer si no está vacío
+    category_id = case Map.get(params, "category_id", "") |> String.trim() do
+      "" -> nil
+      id_str ->
+        case Integer.parse(id_str) do
+          {id_int, _} -> id_int
+          :error -> nil
+        end
+    end
+
     participante_data = %{
       nombre_completo: Map.get(params, "nombre_completo", "") |> String.trim(),
       numero_documento: Map.get(params, "numero_documento", "") |> String.trim(),
       email: Map.get(params, "email", "") |> String.trim(),
       telefono: Map.get(params, "telefono", "") |> String.trim(),
       foto: Map.get(params, "foto", "") |> String.trim(),
-      category_id: Map.get(params, "category_id", "") |> String.trim()
+      category_id: category_id
     }
 
     registration_data = socket.assigns.registration_data
     
-    # Asegurar que no se exceda el índice de participantes
+    # Asegurar que la lista tiene suficientes elementos y actualizar el participante en el índice especificado
+    current_participantes = adjust_participantes_list(registration_data.participantes, max(length(registration_data.participantes), index + 1))
+    
     updated_participantes = 
-      if index < length(registration_data.participantes) do
-        List.update_at(registration_data.participantes, index, fn _ -> participante_data end)
-      else
-        # Si el índice está fuera de rango, actualizar la lista de participantes con el nuevo valor en el lugar correcto
-        # Primero asegurar que la lista tiene suficientes elementos
-        current_participantes = adjust_participantes_list(registration_data.participantes, max(length(registration_data.participantes), index + 1))
-        List.update_at(current_participantes, index, fn _ -> participante_data end)
-      end
+      Enum.map(Enum.with_index(current_participantes), fn {existing_participante, idx} ->
+        if idx == index do
+          participante_data
+        else
+          existing_participante
+        end
+      end)
 
     updated_registration_data = Map.put(registration_data, :participantes, updated_participantes)
     
@@ -224,7 +306,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
 
   defp adjust_participantes_list(participantes, cantidad_personas) do
     current_length = length(participantes)
-    
+
     if current_length < cantidad_personas do
       # Agregar participantes vacíos al final, preservando los datos existentes
       empty_participante = %{
@@ -233,7 +315,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
         email: "",
         telefono: "",
         foto: "",
-        category_id: ""
+        category_id: nil
       }
       participantes ++ List.duplicate(empty_participante, cantidad_personas - current_length)
     else
@@ -243,55 +325,87 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
   end
 
   def handle_event("register_attendees", _params, socket) do
-    # Procesar el comprobante de pago
-    comprobante_pago_path = case consume_uploaded_entries(socket, :comprobante_pago, fn (entry, _entry_data) ->
-      Handler.upload_document(%{filename: Path.basename(entry.client_name), path: entry.path}, "comprobante_pago")
-    end) do
-      [{:ok, path} | _] -> path
-      _ -> nil
-    end
+    # Verificar si hay entradas de carga pendientes
+    upload_entries = for {ref, entry} <- socket.assigns.uploads.comprobante_pago.entries, do: {ref, entry}
+    pending_uploads = Enum.filter(upload_entries, fn {_ref, entry} -> !entry.done? end)
 
-    registration_data = socket.assigns.registration_data
-    updated_registration_data = Map.put(registration_data, :comprobante_pago, comprobante_pago_path)
+    if length(pending_uploads) > 0 do
+      # Aún hay uploads pendientes, mostrar mensaje de error
+      socket = assign(socket,
+        error: "Por favor espere a que el comprobante de pago se suba completamente antes de registrar."
+      )
+      {:noreply, socket}
+    else
+      # Procesar el comprobante de pago solo si está completo
+      comprobante_pago_path = case consume_uploaded_entries(socket, :comprobante_pago, fn (entry, _entry_data) ->
+        Handler.upload_document(%{filename: Path.basename(entry.client_name), path: entry.path}, "comprobante_pago")
+      end) do
+        [{:ok, path} | _] -> path
+        _ -> socket.assigns.registration_data.comprobante_pago
+      end
 
-    # Registrar a todos los participantes
-    results = for participante <- updated_registration_data.participantes do
-      attendee_params = %{
-        nombre_completo: participante.nombre_completo,
-        numero_documento: participante.numero_documento,
-        email: participante.email,
-        telefono: participante.telefono,
-        institucion: updated_registration_data.institucion,
-        foto: participante.foto,
-        category_id: participante.category_id,
-        comprobante_pago: updated_registration_data.comprobante_pago,
-        estado: "pendiente_revision"
-      }
-
-      Registration.create_attendee(attendee_params)
-    end
-
-    # Verificar si todos se registraron correctamente
-    case Enum.find(results, fn {status, _} -> status == :error end) do
-      nil -> 
-        # Todos los registros fueron exitosos
-        socket = socket
-        |> assign(
-          success: "¡Inscripciones completadas exitosamente! Revisa tu correo para más instrucciones.",
-          current_step: nil
+      # Validar que el comprobante no sea nil
+      if is_nil(comprobante_pago_path) do
+        socket = assign(socket,
+          error: "El comprobante de pago es obligatorio. Por favor, suba un archivo."
         )
-        |> put_flash(:info, "¡Inscripciones completadas exitosamente! Revisa tu correo para más instrucciones.")
-        
-        {:noreply, push_navigate(socket, to: "/")}
-      _ -> 
-        # Hubo al menos un error
-        _error_changeset = 
-          results
-          |> Enum.find(fn {status, _} -> status == :error end)
-          |> elem(1)
-        
-        socket = assign(socket, error: "Hubo un error al registrar a uno o más participantes.")
         {:noreply, socket}
+      else
+        registration_data = socket.assigns.registration_data
+        updated_registration_data = Map.put(registration_data, :comprobante_pago, comprobante_pago_path)
+
+        # Registrar solo los participantes según la cantidad especificada
+        participantes_a_registrar = Enum.take(updated_registration_data.participantes, updated_registration_data.cantidad_personas)
+        results = for participante <- participantes_a_registrar do
+          attendee_params = %{
+            nombre_completo: participante.nombre_completo,
+            numero_documento: participante.numero_documento,
+            email: participante.email,
+            telefono: participante.telefono,
+            institucion: updated_registration_data.institucion,
+            foto: participante.foto,
+            category_id: participante.category_id,
+            comprobante_pago: updated_registration_data.comprobante_pago,
+            estado: "pendiente_revision"
+          }
+
+          Registration.create_attendee(attendee_params)
+        end
+
+        # Verificar si todos se registraron correctamente
+        case Enum.find(results, fn {status, _} -> status == :error end) do
+          nil ->
+            # Todos los registros fueron exitosos
+            socket = socket
+            |> assign(
+              success: "¡Inscripciones completadas exitosamente! Revisa tu correo para más instrucciones.",
+              current_step: nil
+            )
+            |> put_flash(:info, "¡Inscripciones completadas exitosamente! Revisa tu correo para más instrucciones.")
+
+            {:noreply, push_navigate(socket, to: "/")}
+          _ ->
+            # Hubo al menos un error
+            error_changeset =
+              results
+              |> Enum.find(fn {status, _} -> status == :error end)
+              |> elem(1)
+
+            # Generar mensaje de error más descriptivo
+            error_message = case error_changeset do
+              %Ecto.Changeset{errors: errors} ->
+                error_details = errors
+                |> Enum.map(fn {field, {msg, _}} -> "#{field}: #{msg}" end)
+                |> Enum.join(", ")
+                "Error al registrar participante: #{error_details}"
+              _ ->
+                "Hubo un error al registrar a uno o más participantes."
+            end
+
+            socket = assign(socket, error: error_message)
+            {:noreply, socket}
+        end
+      end
     end
   end
 
@@ -412,7 +526,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
           <%= if error = Map.get(@errors, :comprobante_pago) do %>
             <p class="text-sm text-red-600 mt-1"><%= error %></p>
           <% end %>
-          <div :for={err <- upload_errors(@uploads.comprobante_pago)} class="text-sm text-red-600 mt-1"><%= err %></div>
+          <div :for={err <- upload_errors(@uploads.comprobante_pago)} class="text-sm text-red-600 mt-1"><%= translate_upload_error(err) %></div>
         </div>
 
         <div class="flex justify-end mt-8">
@@ -440,7 +554,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
           <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
             <h3 class="text-lg font-medium mb-3 text-[#144D85]">Participante <%= index + 1 %></h3>
             
-            <form phx-change={"update_participante_data"} phx-target={index} class="space-y-4">
+            <form phx-change={"update_participante_data"} class="space-y-4">
               <input type="hidden" name="participante_index" value={index} />
               
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -575,7 +689,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
           </div>
         </div>
 
-        <%= for {participante, index} <- Enum.with_index(@registration_data.participantes) do %>
+        <%= for {participante, index} <- Enum.with_index(@registration_data.participantes), index < @registration_data.cantidad_personas do %>
           <div class="border border-gray-200 rounded-lg p-4">
             <h3 class="text-lg font-medium mb-3 text-[#144D85]">Participante <%= index + 1 %></h3>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">

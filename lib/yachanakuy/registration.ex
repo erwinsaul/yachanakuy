@@ -385,6 +385,10 @@ defmodule Yachanakuy.Registration do
     Repo.get_by(Attendee, numero_documento: numero_documento)
   end
 
+  def get_attendee_by_email(email) do
+    Repo.get_by(Attendee, email: email)
+  end
+
   def count_attendees do
     Repo.aggregate(Attendee, :count, :id)
   end
