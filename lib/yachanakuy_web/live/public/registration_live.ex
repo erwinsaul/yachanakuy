@@ -325,87 +325,107 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
   end
 
   def handle_event("register_attendees", _params, socket) do
-    # Verificar si hay entradas de carga pendientes
-    upload_entries = for {ref, entry} <- socket.assigns.uploads.comprobante_pago.entries, do: {ref, entry}
-    pending_uploads = Enum.filter(upload_entries, fn {_ref, entry} -> !entry.done? end)
+    # Verificar si hay archivos subidos y completados
+    uploaded_entries = socket.assigns.uploads.comprobante_pago.entries
+    completed_uploads = Enum.filter(uploaded_entries, fn entry -> entry.done? end)
+    pending_uploads = Enum.filter(uploaded_entries, fn entry -> !entry.done? && entry.progress > 0 end)
 
-    if length(pending_uploads) > 0 do
-      # Aún hay uploads pendientes, mostrar mensaje de error
-      socket = assign(socket,
-        error: "Por favor espere a que el comprobante de pago se suba completamente antes de registrar."
-      )
-      {:noreply, socket}
-    else
-      # Procesar el comprobante de pago solo si está completo
-      comprobante_pago_path = case consume_uploaded_entries(socket, :comprobante_pago, fn (entry, _entry_data) ->
-        Handler.upload_document(%{filename: Path.basename(entry.client_name), path: entry.path}, "comprobante_pago")
-      end) do
-        [{:ok, path} | _] -> path
-        _ -> socket.assigns.registration_data.comprobante_pago
-      end
-
-      # Validar que el comprobante no sea nil
-      if is_nil(comprobante_pago_path) do
+    cond do
+      # Hay uploads en progreso
+      length(pending_uploads) > 0 ->
         socket = assign(socket,
-          error: "El comprobante de pago es obligatorio. Por favor, suba un archivo."
+          error: "Por favor espere a que el comprobante de pago se suba completamente antes de registrar."
         )
         {:noreply, socket}
-      else
-        registration_data = socket.assigns.registration_data
-        updated_registration_data = Map.put(registration_data, :comprobante_pago, comprobante_pago_path)
 
-        # Registrar solo los participantes según la cantidad especificada
-        participantes_a_registrar = Enum.take(updated_registration_data.participantes, updated_registration_data.cantidad_personas)
-        results = for participante <- participantes_a_registrar do
-          attendee_params = %{
-            nombre_completo: participante.nombre_completo,
-            numero_documento: participante.numero_documento,
-            email: participante.email,
-            telefono: participante.telefono,
-            institucion: updated_registration_data.institucion,
-            foto: participante.foto,
-            category_id: participante.category_id,
-            comprobante_pago: updated_registration_data.comprobante_pago,
-            estado: "pendiente_revision"
-          }
-
-          Registration.create_attendee(attendee_params)
+      # Hay uploads completados, procesarlos
+      length(completed_uploads) > 0 ->
+        # Procesar el comprobante de pago
+        comprobante_pago_path = case consume_uploaded_entries(socket, :comprobante_pago, fn (entry, _entry_data) ->
+          Handler.upload_document(%{filename: Path.basename(entry.client_name), path: entry.path}, "comprobante_pago")
+        end) do
+          [{:ok, path} | _] -> path
+          _ -> nil
         end
 
-        # Verificar si todos se registraron correctamente
-        case Enum.find(results, fn {status, _} -> status == :error end) do
-          nil ->
-            # Todos los registros fueron exitosos
-            socket = socket
-            |> assign(
-              success: "¡Inscripciones completadas exitosamente! Revisa tu correo para más instrucciones.",
-              current_step: nil
-            )
-            |> put_flash(:info, "¡Inscripciones completadas exitosamente! Revisa tu correo para más instrucciones.")
+        if is_nil(comprobante_pago_path) do
+          socket = assign(socket,
+            error: "Error al procesar el comprobante de pago. Por favor, inténtelo de nuevo."
+          )
+          {:noreply, socket}
+        else
+          process_registration(socket, comprobante_pago_path)
+        end
 
-            {:noreply, push_navigate(socket, to: "/")}
+      # No hay uploads pero puede haber uno previamente guardado
+      true ->
+        comprobante_pago_path = socket.assigns.registration_data.comprobante_pago
+
+        if is_nil(comprobante_pago_path) do
+          socket = assign(socket,
+            error: "El comprobante de pago es obligatorio. Por favor, suba un archivo."
+          )
+          {:noreply, socket}
+        else
+          process_registration(socket, comprobante_pago_path)
+        end
+    end
+  end
+
+  defp process_registration(socket, comprobante_pago_path) do
+    registration_data = socket.assigns.registration_data
+    updated_registration_data = Map.put(registration_data, :comprobante_pago, comprobante_pago_path)
+
+    # Registrar solo los participantes según la cantidad especificada
+    participantes_a_registrar = Enum.take(updated_registration_data.participantes, updated_registration_data.cantidad_personas)
+    results = for participante <- participantes_a_registrar do
+      attendee_params = %{
+        nombre_completo: participante.nombre_completo,
+        numero_documento: participante.numero_documento,
+        email: participante.email,
+        telefono: participante.telefono,
+        institucion: updated_registration_data.institucion,
+        foto: participante.foto,
+        category_id: participante.category_id,
+        comprobante_pago: updated_registration_data.comprobante_pago,
+        estado: "pendiente_revision"
+      }
+
+      Registration.create_attendee(attendee_params)
+    end
+
+    # Verificar si todos se registraron correctamente
+    case Enum.find(results, fn {status, _} -> status == :error end) do
+      nil ->
+        # Todos los registros fueron exitosos
+        socket = socket
+        |> assign(
+          success: "¡Inscripciones completadas exitosamente! Revisa tu correo para más instrucciones.",
+          current_step: nil
+        )
+        |> put_flash(:info, "¡Inscripciones completadas exitosamente! Revisa tu correo para más instrucciones.")
+
+        {:noreply, push_navigate(socket, to: "/")}
+      _ ->
+        # Hubo al menos un error
+        error_changeset =
+          results
+          |> Enum.find(fn {status, _} -> status == :error end)
+          |> elem(1)
+
+        # Generar mensaje de error más descriptivo
+        error_message = case error_changeset do
+          %Ecto.Changeset{errors: errors} ->
+            error_details = errors
+            |> Enum.map(fn {field, {msg, _}} -> "#{field}: #{msg}" end)
+            |> Enum.join(", ")
+            "Error al registrar participante: #{error_details}"
           _ ->
-            # Hubo al menos un error
-            error_changeset =
-              results
-              |> Enum.find(fn {status, _} -> status == :error end)
-              |> elem(1)
-
-            # Generar mensaje de error más descriptivo
-            error_message = case error_changeset do
-              %Ecto.Changeset{errors: errors} ->
-                error_details = errors
-                |> Enum.map(fn {field, {msg, _}} -> "#{field}: #{msg}" end)
-                |> Enum.join(", ")
-                "Error al registrar participante: #{error_details}"
-              _ ->
-                "Hubo un error al registrar a uno o más participantes."
-            end
-
-            socket = assign(socket, error: error_message)
-            {:noreply, socket}
+            "Hubo un error al registrar a uno o más participantes."
         end
-      end
+
+        socket = assign(socket, error: error_message)
+        {:noreply, socket}
     end
   end
 
