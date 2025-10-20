@@ -22,7 +22,7 @@ defmodule YachanakuyWeb.Admin.AttendeeLive do
       page: 1,
       page_size: 10,
       total_count: length(attendees),
-      page: "admin_attendees",
+      current_page_name: "admin_attendees",
       success_message: nil,
       error_message: nil
     )

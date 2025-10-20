@@ -67,19 +67,19 @@ defmodule Yachanakuy.Uploads.Handler do
             
             # Copiar archivo
             case File.copy(upload.path, destination) do
-              :ok -> 
+              {:ok, _bytes_copied} ->
                 # Verificar que la copia sea segura
                 case validate_file_security(destination) do
-                  :ok -> 
+                  :ok ->
                     # Devolver ruta relativa para almacenar en la base de datos
                     relative_path = Path.relative_to(destination, "priv/static")
                     {:ok, relative_path}
-                  error -> 
+                  error ->
                     # Eliminar archivo si hay problemas de seguridad
                     File.rm(destination)
                     error
                 end
-              {:error, reason} -> 
+              {:error, reason} ->
                 {:error, "Error al copiar archivo: #{reason}"}
             end
           error -> 
