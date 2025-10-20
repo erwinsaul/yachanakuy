@@ -325,14 +325,23 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
   end
 
   def handle_event("register_attendees", _params, socket) do
+    IO.puts("=== INICIO REGISTRO ===")
+
     # Verificar si hay archivos subidos y completados
     uploaded_entries = socket.assigns.uploads.comprobante_pago.entries
+    IO.inspect(uploaded_entries, label: "Uploaded entries")
+
     completed_uploads = Enum.filter(uploaded_entries, fn entry -> entry.done? end)
     pending_uploads = Enum.filter(uploaded_entries, fn entry -> !entry.done? && entry.progress > 0 end)
+
+    IO.inspect(length(completed_uploads), label: "Completed uploads")
+    IO.inspect(length(pending_uploads), label: "Pending uploads")
+    IO.inspect(socket.assigns.registration_data.comprobante_pago, label: "Comprobante previo")
 
     cond do
       # Hay uploads en progreso
       length(pending_uploads) > 0 ->
+        IO.puts("CASO 1: Hay uploads pendientes")
         socket = assign(socket,
           error: "Por favor espere a que el comprobante de pago se suba completamente antes de registrar."
         )
@@ -340,6 +349,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
 
       # Hay uploads completados, procesarlos
       length(completed_uploads) > 0 ->
+        IO.puts("CASO 2: Procesando uploads completados")
         # Procesar el comprobante de pago
         comprobante_pago_path = case consume_uploaded_entries(socket, :comprobante_pago, fn (entry, _entry_data) ->
           Handler.upload_document(%{filename: Path.basename(entry.client_name), path: entry.path}, "comprobante_pago")
@@ -349,24 +359,29 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
         end
 
         if is_nil(comprobante_pago_path) do
+          IO.puts("ERROR: No se pudo procesar el comprobante")
           socket = assign(socket,
             error: "Error al procesar el comprobante de pago. Por favor, inténtelo de nuevo."
           )
           {:noreply, socket}
         else
+          IO.puts("OK: Comprobante procesado, llamando a process_registration")
           process_registration(socket, comprobante_pago_path)
         end
 
       # No hay uploads pero puede haber uno previamente guardado
       true ->
+        IO.puts("CASO 3: Buscando comprobante previamente guardado")
         comprobante_pago_path = socket.assigns.registration_data.comprobante_pago
 
         if is_nil(comprobante_pago_path) do
+          IO.puts("ERROR: No hay comprobante de pago")
           socket = assign(socket,
             error: "El comprobante de pago es obligatorio. Por favor, suba un archivo."
           )
           {:noreply, socket}
         else
+          IO.puts("OK: Comprobante encontrado, llamando a process_registration")
           process_registration(socket, comprobante_pago_path)
         end
     end
