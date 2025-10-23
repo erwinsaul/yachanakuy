@@ -52,8 +52,11 @@
             </button>
 
             <!-- User Menu -->
-            <div class="relative group">
-              <button class="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <div class="relative" phx-click-away={JS.hide(to: "#user-dropdown")}>
+              <button 
+                type="button"
+                class="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                phx-click={JS.toggle(to: "#user-dropdown")}>
                 <div class="w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full flex items-center justify-center shadow-md">
                   <span class="text-white text-sm font-semibold"><%= String.first(@current_scope.user.email) |> String.upcase() %></span>
                 </div>
@@ -76,7 +79,10 @@
               </button>
 
               <!-- Desktop Dropdown -->
-              <div class="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 py-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50">
+              <div 
+                id="user-dropdown" 
+                class="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 py-2 transition-all duration-300 z-50"
+                style="display: none;">
                 <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                   <p class="text-sm font-medium text-gray-900 dark:text-white truncate"><%= @current_scope.user.email %></p>
                   <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Sesión activa</p>
