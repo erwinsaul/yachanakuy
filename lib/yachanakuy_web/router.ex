@@ -96,6 +96,12 @@ defmodule YachanakuyWeb.Router do
       # Commissions management
       live "/commissions", Admin.CommissionLive, :index
     end
+    
+    # Event Information management
+    live "/event_info", Admin.EventInfoLive, :index
+    live "/event_info/new", Admin.EventInfoLive, :new
+    live "/event_info/:id", Admin.EventInfoLive, :show
+    live "/event_info/:id/edit", Admin.EventInfoLive, :edit
   end
 
   # ============================================

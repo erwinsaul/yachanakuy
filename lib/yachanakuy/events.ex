@@ -100,4 +100,45 @@ defmodule Yachanakuy.Events do
   def change_attendee_category(%AttendeeCategory{} = attendee_category, attrs \\ %{}) do
     AttendeeCategory.changeset(attendee_category, attrs)
   end
+
+  alias Yachanakuy.Events.EventInfo
+
+  def list_event_info do
+    Repo.all(EventInfo)
+  end
+
+  def get_event_info!(id) do
+    Repo.get!(EventInfo, id)
+  end
+
+  def get_event_info(id) do
+    Repo.get(EventInfo, id)
+  end
+
+  def get_active_event_info do
+    from(e in EventInfo,
+      where: e.activo == true
+    )
+    |> Repo.all()
+  end
+
+  def create_event_info(attrs \\ %{}) do
+    %EventInfo{}
+    |> EventInfo.changeset(attrs)
+    |> Repo.insert()
+  end
+
+  def update_event_info(%EventInfo{} = event_info, attrs) do
+    event_info
+    |> EventInfo.changeset(attrs)
+    |> Repo.update()
+  end
+
+  def delete_event_info(%EventInfo{} = event_info) do
+    Repo.delete(event_info)
+  end
+
+  def change_event_info(%EventInfo{} = event_info, attrs \\ %{}) do
+    EventInfo.changeset(event_info, attrs)
+  end
 end
