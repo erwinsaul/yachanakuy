@@ -4,7 +4,7 @@ defmodule YachanakuyWeb.Staff.CredentialDeliveryLive do
   alias Yachanakuy.Registration
 
   def mount(_params, _session, socket) do
-    current_user = socket.assigns[:current_scope][:user]
+    current_user = socket.assigns[:current_scope].user
 
     socket = assign(socket,
       current_user: current_user,
