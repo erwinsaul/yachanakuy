@@ -19,12 +19,21 @@ defmodule Yachanakuy.Program.Speaker do
     speaker
     |> cast(attrs, [:nombre_completo, :biografia, :institucion, :foto, :email])
     |> validate_required([:nombre_completo])
-    |> validate_format(:email, ~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "must have the @ sign and no spaces")
+    |> validate_email()
     |> validate_length(:nombre_completo, min: 1, max: 200)
     |> validate_length(:institucion, max: 100)
     |> validate_length(:email, max: 100)
     |> validate_length(:biografia, max: 1000)
     |> validate_url_or_upload_format(:foto)
+  end
+
+  # Validar email solo si está presente
+  defp validate_email(changeset) do
+    case get_change(changeset, :email) do
+      nil -> changeset
+      "" -> changeset
+      _email -> validate_format(changeset, :email, ~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "must have the @ sign and no spaces")
+    end
   end
 
   # Validación personalizada para permitir URL o rutas locales de archivo

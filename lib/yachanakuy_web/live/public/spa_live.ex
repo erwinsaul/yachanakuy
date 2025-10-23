@@ -98,7 +98,7 @@ defmodule YachanakuyWeb.Public.SpaLive do
     ]
   end
 
-  defp generate_test_speakers() do
+  defp _generate_test_speakers() do
     [
       %{
         nombre_completo: "Expositor 1",
@@ -146,7 +146,7 @@ defmodule YachanakuyWeb.Public.SpaLive do
 
   <div id="fullscreen-container">
     <!-- Sección Inicio -->
-    <div class="section full-center" id="inicio" data-background-color="#F0F8FF" data-video="https://www.youtube.com/embed/4UYxB_UhJ9A?list=PL7qvgzv-R8_EG5yZp7PLhHXr93zrkxUj8&index=5&autoplay=1&loop=1&mute=1&controls=0">
+    <div class="section full-center" id="inicio" data-background-color="#F0F8FF">
       <div class="content">
         <h1><%= if @settings, do: @settings.nombre, else: "Yachanakuy - Congreso" %></h1>
         <p><%= if @settings && @settings.fecha_inicio && @settings.fecha_fin do %>

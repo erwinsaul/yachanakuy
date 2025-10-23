@@ -372,7 +372,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
   end
 
   # Consumir archivos pendientes solo si están completados
-  defp consume_pending_uploads(socket) do
+  defp _consume_pending_uploads(socket) do
     IO.puts("=== INTENTANDO CONSUMIR UPLOADS PENDIENTES ===")
 
     # Obtener todas las entradas
@@ -655,7 +655,8 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
           <div class="bg-white rounded-lg shadow-lg p-6">
             <!-- Indicador de pasos -->
             <div class="mb-8">
-              <h1 class="text-3xl font-bold mb-4 text-[#144D85]">Formulario de Inscripción</h1>
+              <h1 class="text-3xl font-bold mb-2 text-[#144D85]">CCBOL 2025</h1>
+              <h2 class="text-2xl font-semibold mb-4 text-[#144D85]">Formulario de Inscripción</h2>
               
               <!-- Barra de progreso -->
               <div class="flex items-center justify-between mb-6">

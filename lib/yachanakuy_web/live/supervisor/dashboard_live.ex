@@ -137,14 +137,16 @@ defmodule YachanakuyWeb.Supervisor.DashboardLive do
                     <h3 class="font-medium text-gray-800"><%= commission.nombre %></h3>
                     <p class="text-sm text-gray-600">Código: <%= commission.codigo %></p>
                   </div>
+                  <%!-- TODO: Implement commission details page
                   <div class="flex space-x-2">
-                    <.link 
+                    <.link
                       navigate={~p"/supervisor/commissions/#{commission}"}
                       class="bg-[#144D85] hover:bg-[#0d3a66] text-white py-1 px-3 rounded-md text-sm transition duration-300"
                     >
                       Ver Detalles
                     </.link>
                   </div>
+                  --%>
                 </div>
               <% end %>
             </div>

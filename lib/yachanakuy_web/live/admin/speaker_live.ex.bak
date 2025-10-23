@@ -27,18 +27,17 @@ defmodule YachanakuyWeb.Admin.SpeakerLive do
 
 	def handle_event("save", %{"speaker" => speaker_params}, socket) do
     # Procesar las subidas antes de intentar crear o actualizar
-    uploaded_files = consume_uploaded_entries(socket, :photo, fn meta, entry ->
+    uploaded_files = consume_uploaded_entries(socket, :photo, fn (entry, _entry_data) ->
       # Devolvemos la ruta temporal del archivo subido
-      {:ok, %{path: meta.path, client_name: entry.client_name}}
+      %{path: entry.path, client_name: entry.client_name}
     end)
 
     # Obtener el primer archivo subido si existe
     photo_upload = case uploaded_files do
-      [{:ok, %{path: path, client_name: name}} | _] ->
+      [%{path: path, client_name: _name} | _] -> 
         # Devolver un struct similar al upload original para que funcione con nuestra lógica existente
-        %{filename: name, path: path}
+        %{filename: Path.basename(path), path: path}
       [] -> nil
-      _ -> nil
     end
 
     result = if socket.assigns.editing_speaker do
@@ -51,52 +50,48 @@ defmodule YachanakuyWeb.Admin.SpeakerLive do
       {:ok, _speaker} ->
         speakers = Program.list_speakers_with_sessions()
         changeset = Program.change_speaker(%Yachanakuy.Program.Speaker{})
-
-        socket = assign(socket,
+        
+        socket = socket
+        |> assign(
           speakers: speakers,
           changeset: changeset,
           editing_speaker: nil,
           success_message: if(socket.assigns.editing_speaker, do: "Expositor actualizado", else: "Expositor creado") <> " exitosamente"
         )
-
+        |> allow_upload(:photo,
+          accept: ~w(.jpg .jpeg .png .gif .webp),
+          max_entries: 1,
+          max_file_size: 5_000_000
+        )
+        
         {:noreply, socket}
 
       {:error, %Ecto.Changeset{} = changeset} ->
-        {:noreply, assign(socket, changeset: changeset)}
-
-      {:error, reason} when is_binary(reason) ->
-        # Si el error es de upload (string), crear un changeset con el error
-        changeset =
-          %Yachanakuy.Program.Speaker{}
-          |> Program.change_speaker(speaker_params)
-          |> Ecto.Changeset.add_error(:foto, reason)
-          |> Map.put(:action, :insert)
-
-        {:noreply, assign(socket, changeset: changeset)}
+        socket = assign(socket, changeset: changeset)
+        |> allow_upload(:photo,
+          accept: ~w(.jpg .jpeg .png .gif .webp),
+          max_entries: 1,
+          max_file_size: 5_000_000
+        )
+        {:noreply, socket}
     end
 	end
-
-  # Handle form validation in real-time
-  def handle_event("validate", %{"speaker" => speaker_params}, socket) do
-    # Limpiar campos virtuales que no deben ser validados en tiempo real
-    clean_params = Map.drop(speaker_params, ["_unused_biografia", "_unused_email", "_unused_institucion"])
-    
-    changeset = 
-      %Yachanakuy.Program.Speaker{}
-      |> Program.change_speaker(clean_params)
-      |> Map.put(:action, :validate)
-
-    {:noreply, assign(socket, changeset: changeset)}
-  end
 
   def handle_event("edit", %{"id" => id}, socket) do
     speaker = Program.get_speaker!(String.to_integer(id))
     changeset = Program.change_speaker(speaker)
-
-    {:noreply, assign(socket,
+    
+    socket = assign(socket, 
       changeset: changeset,
       editing_speaker: speaker
-    )}
+    )
+    |> allow_upload(:photo,
+      accept: ~w(.jpg .jpeg .png .gif .webp),
+      max_entries: 1,
+      max_file_size: 5_000_000
+    )
+    
+    {:noreply, socket}
   end
 
   def handle_event("delete", %{"id" => id}, socket) do
@@ -105,22 +100,36 @@ defmodule YachanakuyWeb.Admin.SpeakerLive do
 
     speakers = Program.list_speakers_with_sessions()
     changeset = Program.change_speaker(%Yachanakuy.Program.Speaker{})
-
-    {:noreply, assign(socket,
-      speakers: speakers,
+    
+    socket = assign(socket, 
+      speakers: speakers, 
       changeset: changeset,
       editing_speaker: nil,
       success_message: "Expositor eliminado exitosamente"
-    )}
+    )
+    |> allow_upload(:photo,
+      accept: ~w(.jpg .jpeg .png .gif .webp),
+      max_entries: 1,
+      max_file_size: 5_000_000
+    )
+    
+    {:noreply, socket}
   end
 
   def handle_event("cancel", _params, socket) do
     changeset = Program.change_speaker(%Yachanakuy.Program.Speaker{})
-
-    {:noreply, assign(socket,
+    
+    socket = assign(socket, 
       changeset: changeset,
       editing_speaker: nil
-    )}
+    )
+    |> allow_upload(:photo,
+      accept: ~w(.jpg .jpeg .png .gif .webp),
+      max_entries: 1,
+      max_file_size: 5_000_000
+    )
+    
+    {:noreply, socket}
   end
 
   def handle_event("cancel_upload", %{"ref" => ref}, socket) do
@@ -202,9 +211,9 @@ defmodule YachanakuyWeb.Admin.SpeakerLive do
                   <%= if @editing_speaker && @editing_speaker.foto do %>
                     <div class="mt-2">
                       <p class="text-sm text-gray-600 mb-1">Foto actual:</p>
-                      <img
-                        src={if String.starts_with?(@editing_speaker.foto, "http"), do: @editing_speaker.foto, else: "/" <> @editing_speaker.foto}
-                        alt="Foto actual del expositor"
+                      <img 
+                        src={if String.starts_with?(@editing_speaker.foto, "http"), do: @editing_speaker.foto, else: ~p"/#{@editing_speaker.foto}"} 
+                        alt="Foto actual del expositor" 
                         class="w-16 h-16 object-cover rounded border"
                       />
                     </div>

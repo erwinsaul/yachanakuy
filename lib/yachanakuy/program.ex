@@ -69,15 +69,22 @@ defmodule Yachanakuy.Program do
   def create_speaker_with_photo(attrs \\ %{}, photo_upload \\ nil) do
     # Si hay un archivo de foto para subir
     case photo_upload do
-      nil -> 
+      nil ->
         create_speaker(attrs)
-      upload -> 
+      upload ->
         # Intentar subir la foto
         case Yachanakuy.Uploads.Handler.upload_image(upload, "speaker") do
           {:ok, photo_path} ->
             # Agregar la ruta de la foto a los atributos
             attrs_with_photo = Map.put(attrs, "foto", photo_path)
             create_speaker(attrs_with_photo)
+          {:error, reason} when is_binary(reason) ->
+            # Convertir el error de string a un changeset con error
+            changeset =
+              %Speaker{}
+              |> Speaker.changeset(attrs)
+              |> Ecto.Changeset.add_error(:foto, reason)
+            {:error, changeset}
           {:error, reason} ->
             {:error, reason}
         end
@@ -87,21 +94,28 @@ defmodule Yachanakuy.Program do
   def update_speaker_with_photo(%Speaker{} = speaker, attrs, photo_upload \\ nil) do
     # Si hay un archivo de foto para subir
     case photo_upload do
-      nil -> 
+      nil ->
         update_speaker(speaker, attrs)
-      upload -> 
+      upload ->
         # Intentar subir la foto
         case Yachanakuy.Uploads.Handler.upload_image(upload, "speaker") do
           {:ok, photo_path} ->
             # Agregar la ruta de la foto a los atributos
             attrs_with_photo = Map.put(attrs, "foto", photo_path)
-            
+
             # Si el speaker tenía una foto anterior, eliminarla
             if speaker.foto && String.starts_with?(speaker.foto, "uploads/speakers/") do
               Yachanakuy.Uploads.Handler.delete_file(speaker.foto)
             end
-            
+
             update_speaker(speaker, attrs_with_photo)
+          {:error, reason} when is_binary(reason) ->
+            # Convertir el error de string a un changeset con error
+            changeset =
+              speaker
+              |> Speaker.changeset(attrs)
+              |> Ecto.Changeset.add_error(:foto, reason)
+            {:error, changeset}
           {:error, reason} ->
             {:error, reason}
         end
