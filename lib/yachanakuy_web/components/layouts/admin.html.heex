@@ -235,7 +235,7 @@
                       </svg>
                       General
                     </a>
-                    <a href="/admin/module_configurations" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 module-dropdown-item" data-module="module_config">
+                    <a href="/admin/module_configurations" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
                       <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14-7H5m14 14H5"></path>
                       </svg>
@@ -378,7 +378,7 @@
                 </svg>
                 Paquetes
               </a>
-              <a href="/admin/module_configurations" class="flex items-center px-3 py-3 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-200 module-menu-item" data-module="module_config">
+              <a href="/admin/module_configurations" class="flex items-center px-3 py-3 rounded-lg text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 transition-all duration-200">
                 <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14-7H5m14 14H5"></path>
                 </svg>
@@ -604,7 +604,8 @@ function updateModuleVisibility() {
   const moduleMenuItems = document.querySelectorAll('.module-menu-item');
   moduleMenuItems.forEach(item => {
     const module = item.dataset.module;
-    if (module && !enabledModulesList.includes(module)) {
+    // Always show module configuration - it's a system admin function
+    if (module && module !== 'module_config' && !enabledModulesList.includes(module)) {
       item.style.display = 'none';
     }
   });
@@ -613,7 +614,8 @@ function updateModuleVisibility() {
   const dropdownModuleItems = document.querySelectorAll('.module-dropdown-item');
   dropdownModuleItems.forEach(item => {
     const module = item.dataset.module;
-    if (module && !enabledModulesList.includes(module)) {
+    // Always show module configuration - it's a system admin function
+    if (module && module !== 'module_config' && !enabledModulesList.includes(module)) {
       item.style.display = 'none';
     }
   });
