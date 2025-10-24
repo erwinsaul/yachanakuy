@@ -98,6 +98,15 @@ defmodule YachanakuyWeb.Router do
       
       # Event Information management
       live "/event_info", Admin.EventInfoLive, :index
+      
+      # Tourist Information management
+      live "/tourist_info", Admin.TouristInfoLive, :index
+      
+      # Package management
+      live "/packages", Admin.PackageLive, :index
+      
+      # Module Configuration
+      live "/module_configurations", Admin.ModuleConfigurationLive, :index
     end
   end
 

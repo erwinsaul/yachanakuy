@@ -238,6 +238,10 @@ defmodule YachanakuyWeb.UserAuth do
     if socket.assigns[:current_scope] && 
        socket.assigns.current_scope.user && 
        socket.assigns.current_scope.user.rol == "admin" do
+      # Add module configurations to the socket
+      module_configs = Yachanakuy.Settings.list_module_configurations()
+      enabled_modules = for config <- module_configs, config.enabled, do: config.module_name
+      socket = Phoenix.Component.assign(socket, :enabled_modules, enabled_modules)
       {:cont, socket}
     else
       socket =
@@ -259,6 +263,10 @@ defmodule YachanakuyWeb.UserAuth do
     if socket.assigns[:current_scope] && 
        socket.assigns.current_scope.user && 
        socket.assigns.current_scope.user.rol in ["admin", "operador"] do
+      # Add module configurations to the socket
+      module_configs = Yachanakuy.Settings.list_module_configurations()
+      enabled_modules = for config <- module_configs, config.enabled, do: config.module_name
+      socket = Phoenix.Component.assign(socket, :enabled_modules, enabled_modules)
       {:cont, socket}
     else
       socket =
@@ -280,6 +288,10 @@ defmodule YachanakuyWeb.UserAuth do
     if socket.assigns[:current_scope] && 
        socket.assigns.current_scope.user && 
        socket.assigns.current_scope.user.rol in ["admin", "encargado_comision"] do
+      # Add module configurations to the socket
+      module_configs = Yachanakuy.Settings.list_module_configurations()
+      enabled_modules = for config <- module_configs, config.enabled, do: config.module_name
+      socket = Phoenix.Component.assign(socket, :enabled_modules, enabled_modules)
       {:cont, socket}
     else
       socket =
