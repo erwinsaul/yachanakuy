@@ -31,7 +31,7 @@
               type="button"
               class="lg:hidden inline-flex items-center justify-center p-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-200"
               aria-expanded="false"
-              phx-click={JS.toggle(to: "#mobile-menu") |> JS.toggle_class("hidden", to: "#mobile-menu")}>
+              phx-click={JS.hide(to: "#programa-dropdown") |> JS.hide(to: "#gestion-dropdown") |> JS.hide(to: "#user-dropdown") |> JS.toggle(to: "#mobile-menu")}>
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
               </svg>
@@ -53,10 +53,10 @@
 
             <!-- User Menu -->
             <div class="relative" phx-click-away={JS.hide(to: "#user-dropdown")}>
-              <button 
+              <button
                 type="button"
                 class="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                phx-click={JS.toggle(to: "#user-dropdown") |> JS.toggle_class("hidden", to: "#user-dropdown")}>
+                phx-click={JS.hide(to: "#programa-dropdown") |> JS.hide(to: "#gestion-dropdown") |> JS.toggle(to: "#user-dropdown")}>
                 <div class="w-9 h-9 bg-gradient-to-br from-blue-600 to-blue-700 rounded-full flex items-center justify-center shadow-md">
                   <span class="text-white text-sm font-semibold"><%= String.first(@current_scope.user.email) |> String.upcase() %></span>
                 </div>
@@ -79,8 +79,8 @@
               </button>
 
               <!-- Desktop Dropdown -->
-              <div 
-                id="user-dropdown" 
+              <div
+                id="user-dropdown"
                 class="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 py-2 transition-all duration-300 z-50 hidden">
                 <div class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
                   <p class="text-sm font-medium text-gray-900 dark:text-white truncate"><%= @current_scope.user.email %></p>
@@ -109,7 +109,7 @@
     <%= if @current_scope && @current_scope.user do %>
       <div class="hidden lg:block border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav class="flex space-x-1 py-2 overflow-x-auto" aria-label="Tabs">
+          <nav class="flex space-x-1 py-2" aria-label="Tabs">
             <%= cond do %>
               <% @current_scope.user.rol == "admin" -> %>
                 <a href="/admin" class="group flex items-center px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all duration-200 whitespace-nowrap">
@@ -125,10 +125,11 @@
                   Participantes
                 </a>
                 <div class="relative" phx-click-away={JS.hide(to: "#programa-dropdown")}>
-                  <button 
+                  <button
+                    id="programa-button"
                     type="button"
                     class="group flex items-center px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all duration-200 whitespace-nowrap"
-                    phx-click={JS.toggle(to: "#programa-dropdown") |> JS.toggle_class("hidden", to: "#programa-dropdown")}>
+                    phx-click={JS.hide(to: "#gestion-dropdown") |> JS.hide(to: "#user-dropdown") |> JS.toggle(to: "#programa-dropdown")}>
                     <svg class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
                     </svg>
@@ -137,9 +138,9 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                     </svg>
                   </button>
-                  <div 
-                    id="programa-dropdown" 
-                    class="absolute left-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 transition-all duration-200 z-50 hidden">
+                  <div
+                    id="programa-dropdown"
+                    class="fixed w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 transition-all duration-200 z-[60] hidden">
                     <a href="/admin/speakers" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
                       <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0z"></path>
@@ -161,10 +162,11 @@
                   </div>
                 </div>
                 <div class="relative" phx-click-away={JS.hide(to: "#gestion-dropdown")}>
-                  <button 
+                  <button
+                    id="gestion-button"
                     type="button"
                     class="group flex items-center px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-all duration-200 whitespace-nowrap"
-                    phx-click={JS.toggle(to: "#gestion-dropdown") |> JS.toggle_class("hidden", to: "#gestion-dropdown")}>
+                    phx-click={JS.hide(to: "#programa-dropdown") |> JS.hide(to: "#user-dropdown") |> JS.toggle(to: "#gestion-dropdown")}>
                     <svg class="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0z"></path>
                     </svg>
@@ -173,9 +175,9 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                     </svg>
                   </button>
-                  <div 
-                    id="gestion-dropdown" 
-                    class="absolute left-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 transition-all duration-200 z-50 hidden">
+                  <div
+                    id="gestion-dropdown"
+                    class="fixed w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 transition-all duration-200 z-[60] hidden">
                     <a href="/admin/commissions" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
                       <svg class="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0z"></path>
@@ -477,5 +479,49 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   updateThemeIcons();
+});
+
+// Dropdown positioning functions
+function positionDropdown(dropdownId, buttonId) {
+  const button = document.getElementById(buttonId);
+  const dropdown = document.getElementById(dropdownId);
+  
+  if (!button || !dropdown) return;
+  
+  const buttonRect = button.getBoundingClientRect();
+  const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+  const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+  
+  // Position dropdown below the button
+  dropdown.style.top = `${buttonRect.bottom + scrollTop}px`;
+  dropdown.style.left = `${buttonRect.left + scrollLeft}px`;
+}
+
+// Add a small delay to ensure the dropdown is visible before positioning
+document.addEventListener('click', function(e) {
+  // Check if the click was on one of our dropdown buttons
+  const button = e.target.closest('button');
+  if (!button) return;
+  
+  // If it's the Programa button
+  if (button.id === 'programa-button') {
+    setTimeout(() => positionDropdown('programa-dropdown', 'programa-button'), 10);
+  } 
+  // If it's the Gestión button
+  else if (button.id === 'gestion-button') {
+    setTimeout(() => positionDropdown('gestion-dropdown', 'gestion-button'), 10);
+  }
+});
+
+// Also handle clicks away to ensure proper positioning when reopening
+document.addEventListener('phx:show', function() {
+  setTimeout(() => {
+    if (!document.getElementById('programa-dropdown').classList.contains('hidden')) {
+      positionDropdown('programa-dropdown', 'programa-button');
+    }
+    if (!document.getElementById('gestion-dropdown').classList.contains('hidden')) {
+      positionDropdown('gestion-dropdown', 'gestion-button');
+    }
+  }, 10);
 });
 </script>

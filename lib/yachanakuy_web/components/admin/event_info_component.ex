@@ -3,69 +3,78 @@ defmodule YachanakuyWeb.Admin.EventInfoFormComponent do
 
   def render(assigns) do
     ~H"""
-    <.form
-      for={@changeset}
-      phx-target={@myself}
-      phx-submit="save"
-      class="space-y-6"
-    >
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        <div class="form-group">
+    <div>
+      <.form
+        :let={f}
+        for={@changeset}
+        phx-target={@myself}
+        phx-submit="save"
+        class="space-y-4"
+      >
+        <div>
           <.input
-            field={@changeset[:titulo]}
+            field={f[:titulo]}
             type="text"
             label="Título *"
             placeholder="Título del evento"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
           />
         </div>
 
-        <div class="form-group">
+        <div>
           <.input
-            field={@changeset[:estado]}
-            type="select"
-            label="Estado"
-            prompt="Seleccione un estado"
-            options={[borrador: "borrador", publicado: "publicado", activo: "activo", inactivo: "inactivo", finalizado: "finalizado"]}
-          />
-        </div>
-
-        <div class="form-group md:col-span-2">
-          <.input
-            field={@changeset[:descripcion]}
+            field={f[:descripcion]}
             type="textarea"
             label="Descripción"
-            placeholder="Descripción detallada del evento"
-            rows="4"
+            placeholder="Descripción del evento"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] h-32"
           />
         </div>
 
-        <div class="form-group">
+        <div>
           <.input
-            field={@changeset[:imagen]}
+            field={f[:estado]}
+            type="select"
+            label="Estado *"
+            options={[
+              {"Borrador", "borrador"},
+              {"Publicado", "publicado"},
+              {"Activo", "activo"},
+              {"Inactivo", "inactivo"},
+              {"Finalizado", "finalizado"}
+            ]}
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
+          />
+        </div>
+
+        <div>
+          <.input
+            field={f[:imagen]}
             type="text"
-            label="Imagen (URL)"
-            placeholder="URL de la imagen del evento"
+            label="URL de Imagen"
+            placeholder="https://ejemplo.com/imagen.jpg"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
           />
         </div>
 
-        <div class="form-group flex items-center">
+        <div class="flex items-center">
           <.input
-            field={@changeset[:activo]}
+            field={f[:activo]}
             type="checkbox"
             label="¿Activo?"
           />
         </div>
-      </div>
 
-      <div class="mt-6">
-        <button type="submit" class="bg-[#144D85] hover:bg-[#0d3a66] text-white font-bold py-2 px-4 rounded transition duration-300 mr-2">
-          <%= if @action == :new, do: "Crear", else: "Actualizar" %>
-        </button>
-        <.link href={~p"/admin/event_info"} class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-300">
-          Cancelar
-        </.link>
-      </div>
-    </.form>
+        <div class="pt-4">
+          <button
+            type="submit"
+            class="w-full bg-[#144D85] hover:bg-[#0d3a66] text-white font-bold py-2 px-4 rounded-md transition duration-300"
+          >
+            <%= if @action == :new, do: "Crear", else: "Actualizar" %>
+          </button>
+        </div>
+      </.form>
+    </div>
     """
   end
 

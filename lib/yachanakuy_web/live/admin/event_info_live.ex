@@ -8,50 +8,18 @@ defmodule YachanakuyWeb.Admin.EventInfoLive do
   on_mount {YachanakuyWeb.UserAuth, :ensure_admin}
 
   def mount(_params, _session, socket) do
-    {:ok, assign(socket, page_title: "Información del Evento")}
-  end
+    event_info_list = Events.list_event_info()
+    changeset = Events.change_event_info(%EventInfo{})
 
-  def handle_params(params, _url, socket) do
-    case params do
-      %{"id" => _id, "action" => "new"} ->
-        changeset = Events.change_event_info(%EventInfo{})
-        
-        {:noreply,
-         socket
-         |> assign(:event_info, nil)
-         |> assign(:changeset, changeset)
-         |> assign(:page_title, "Nueva Información del Evento")
-         |> assign(:action, :new)}
+    socket = assign(socket,
+      event_info_list: event_info_list,
+      changeset: changeset,
+      editing_event_info: nil,
+      page: "admin_event_info",
+      success_message: nil
+    )
 
-      %{"id" => id, "action" => "edit"} ->
-        event_info = Events.get_event_info!(String.to_integer(id))
-        changeset = Events.change_event_info(event_info)
-        
-        {:noreply,
-         socket
-         |> assign(:event_info, event_info)
-         |> assign(:changeset, changeset)
-         |> assign(:page_title, "Editar Información del Evento")
-         |> assign(:action, :edit)}
-
-      %{"id" => id} ->
-        event_info = Events.get_event_info!(String.to_integer(id))
-        
-        {:noreply,
-         socket
-         |> assign(:event_info, event_info)
-         |> assign(:page_title, event_info.titulo)
-         |> assign(:action, :show)}
-
-      _ ->
-        event_info_list = Events.list_event_info()
-        
-        {:noreply,
-         socket
-         |> assign(:event_info_list, event_info_list)
-         |> assign(:page_title, "Información del Evento")
-         |> assign(:action, :index)}
-    end
+    {:ok, socket}
   end
 
   def handle_event("delete", %{"id" => id}, socket) do
@@ -59,264 +27,176 @@ defmodule YachanakuyWeb.Admin.EventInfoLive do
     {:ok, _} = Events.delete_event_info(event_info)
 
     event_info_list = Events.list_event_info()
+    changeset = Events.change_event_info(%EventInfo{})
 
     {:noreply,
      socket
-     |> put_flash(:info, "Información del evento eliminada exitosamente.")
-     |> assign(:event_info_list, event_info_list)}
+     |> assign(:event_info_list, event_info_list)
+     |> assign(:changeset, changeset)
+     |> assign(:editing_event_info, nil)
+     |> assign(:success_message, "Información del evento eliminada exitosamente.")}
   end
 
-  def handle_event("save", %{"event_info" => event_info_params}, socket) do
-    case socket.assigns.action do
-      :new ->
-        case Events.create_event_info(event_info_params) do
-          {:ok, _event_info} ->
-            event_info_list = Events.list_event_info()
+  def handle_event("edit", %{"id" => id}, socket) do
+    event_info = Events.get_event_info!(String.to_integer(id))
+    changeset = Events.change_event_info(event_info)
 
-            {:noreply,
-             socket
-             |> put_flash(:info, "Información del evento creada exitosamente.")
-             |> assign(:event_info_list, event_info_list)
-             |> assign(:action, :index)}
+    {:noreply, assign(socket,
+      changeset: changeset,
+      editing_event_info: event_info
+    )}
+  end
 
-          {:error, changeset} ->
-            {:noreply, assign(socket, :changeset, changeset)}
-        end
+  def handle_event("cancel", _params, socket) do
+    changeset = Events.change_event_info(%EventInfo{})
 
-      :edit ->
-        event_info = socket.assigns.event_info
-
-        case Events.update_event_info(event_info, event_info_params) do
-          {:ok, updated_event_info} ->
-            {:noreply,
-             socket
-             |> put_flash(:info, "Información del evento actualizada exitosamente.")
-             |> assign(:event_info, updated_event_info)
-             |> assign(:action, :show)}
-
-          {:error, changeset} ->
-            {:noreply, assign(socket, :changeset, changeset)}
-        end
-    end
+    {:noreply, assign(socket,
+      changeset: changeset,
+      editing_event_info: nil
+    )}
   end
 
   def handle_info({:save_event_info, {_component_pid, action, event_info_params}}, socket) do
-    # Handle the form submission from the component
-    case action do
-      :new ->
-        case Events.create_event_info(event_info_params) do
-          {:ok, _event_info} ->
-            event_info_list = Events.list_event_info()
+    result = if socket.assigns.editing_event_info do
+      Events.update_event_info(socket.assigns.editing_event_info, event_info_params)
+    else
+      Events.create_event_info(event_info_params)
+    end
 
-            {:noreply,
-             socket
-             |> put_flash(:info, "Información del evento creada exitosamente.")
-             |> assign(:event_info_list, event_info_list)
-             |> assign(:action, :index)}
+    case result do
+      {:ok, _event_info} ->
+        event_info_list = Events.list_event_info()
+        changeset = Events.change_event_info(%EventInfo{})
 
-          {:error, changeset} ->
-            {:noreply, assign(socket, :changeset, changeset)}
-        end
+        socket = assign(socket,
+          event_info_list: event_info_list,
+          changeset: changeset,
+          editing_event_info: nil,
+          success_message: if(socket.assigns.editing_event_info, do: "Información del evento actualizada", else: "Información del evento creada") <> " exitosamente"
+        )
 
-      :edit ->
-        event_info = socket.assigns.event_info
+        {:noreply, socket}
 
-        case Events.update_event_info(event_info, event_info_params) do
-          {:ok, updated_event_info} ->
-            {:noreply,
-             socket
-             |> put_flash(:info, "Información del evento actualizada exitosamente.")
-             |> assign(:event_info, updated_event_info)
-             |> assign(:action, :show)}
-
-          {:error, changeset} ->
-            {:noreply, assign(socket, :changeset, changeset)}
-        end
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:noreply, assign(socket, changeset: changeset)}
     end
   end
 
   def render(assigns) do
     ~H"""
     <div class="container mx-auto px-4 py-8">
-      <div class="flex justify-between items-center mb-6">
-        <h1 class="text-3xl font-bold text-[#144D85]"><%= @page_title %></h1>
-        <%= if @action == :index do %>
-          <.link 
-            href={~p"/admin/event_info/new"} 
-            class="inline-block bg-[#144D85] hover:bg-[#0d3a66] text-white font-bold py-2 px-4 rounded transition duration-300"
-          >
-            Nueva Información
-          </.link>
-        <% else %>
-          <.link 
-            href={~p"/admin/event_info"} 
-            class="inline-block bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-300"
-          >
-            Volver al listado
-          </.link>
-        <% end %>
-      </div>
+      <h1 class="text-3xl font-bold mb-8 text-[#144D85]">Información del Evento</h1>
 
-      <div class="bg-white shadow-md rounded-lg overflow-hidden">
-        <%= case @action do %>
-          <% :index -> %>
-            <div>
-              <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                  <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Título</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activo</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                  <%= for event_info <- @event_info_list do %>
+      <%= if @success_message do %>
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-6">
+          <%= @success_message %>
+        </div>
+      <% end %>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Formulario -->
+        <div class="lg:col-span-1">
+          <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4 text-[#144D85]">
+              <%= if @editing_event_info, do: "Editar Información del Evento", else: "Nueva Información del Evento" %>
+            </h2>
+
+            <.live_component
+              module={YachanakuyWeb.Admin.EventInfoFormComponent}
+              id={if @editing_event_info, do: "event_info_form_#{@editing_event_info.id}", else: "event_info_form_new"}
+              changeset={@changeset}
+              action={if @editing_event_info, do: :edit, else: :new}
+            />
+
+            <%= if @editing_event_info do %>
+              <button
+                phx-click="cancel"
+                type="button"
+                class="w-full mt-4 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-md transition duration-300"
+              >
+                Cancelar
+              </button>
+            <% end %>
+          </div>
+        </div>
+
+        <!-- Lista de Información del Evento -->
+        <div class="lg:col-span-2">
+          <div class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4 text-[#144D85]">Lista de Información del Evento</h2>
+
+            <%= if @event_info_list == [] do %>
+              <p class="text-gray-500 text-center py-8">No hay información del evento registrada aún.</p>
+            <% else %>
+              <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                  <thead class="bg-gray-50">
                     <tr>
-                      <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="text-sm font-medium text-gray-900"><%= event_info.titulo %></div>
-                      </td>
-                      <td class="px-6 py-4 whitespace-nowrap">
-                        <span class={
-                          "px-2 inline-flex text-xs leading-5 font-semibold rounded-full " <>
-                          case event_info.estado do
-                            "activo" -> "bg-green-100 text-green-800"
-                            "publicado" -> "bg-blue-100 text-blue-800"
-                            "inactivo" -> "bg-yellow-100 text-yellow-800"
-                            "finalizado" -> "bg-gray-100 text-gray-800"
-                            "borrador" -> "bg-purple-100 text-purple-800"
-                            _ -> "bg-red-100 text-red-800"
-                          end
-                        }>
-                          <%= event_info.estado %>
-                        </span>
-                      </td>
-                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <%= if event_info.activo, do: "Sí", else: "No" %>
-                      </td>
-                      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <.link href={~p"/admin/event_info/#{event_info.id}"} class="text-indigo-600 hover:text-indigo-900 mr-3">Ver</.link>
-                        <.link href={~p"/admin/event_info/#{event_info.id}/edit"} class="text-indigo-600 hover:text-indigo-900 mr-3">Editar</.link>
-                        <.link 
-                          phx-click={JS.push("js-flash", value: %{info: "Eliminando...", color: "blue"})}
-                          phx-value-id={event_info.id}
-                          phx-submit="delete" 
-                          data-confirm="¿Está seguro que desea eliminar esta información del evento?" 
-                          class="text-red-600 hover:text-red-900"
-                        >
-                          Eliminar
-                        </.link>
-                      </td>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Título</th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activo</th>
+                      <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                     </tr>
-                  <% end %>
-                </tbody>
-              </table>
-
-              <%= if Enum.empty?(@event_info_list) do %>
-                <div class="text-center py-8">
-                  <p class="text-gray-500">No hay información del evento registrada aún.</p>
-                  <.link href={~p"/admin/event_info/new"} class="mt-4 inline-block bg-[#144D85] hover:bg-[#0d3a66] text-white font-bold py-2 px-4 rounded transition duration-300">
-                    Crear la primera información
-                  </.link>
-                </div>
-              <% end %>
-            </div>
-
-          <% :show -> %>
-            <div class="p-6">
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-700 mb-2">Título</h3>
-                  <p class="text-gray-900"><%= @event_info.titulo %></p>
-                </div>
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-700 mb-2">Estado</h3>
-                  <span class={
-                    "px-2 inline-flex text-xs leading-5 font-semibold rounded-full " <>
-                    case @event_info.estado do
-                      "activo" -> "bg-green-100 text-green-800"
-                      "publicado" -> "bg-blue-100 text-blue-800"
-                      "inactivo" -> "bg-yellow-100 text-yellow-800"
-                      "finalizado" -> "bg-gray-100 text-gray-800"
-                      "borrador" -> "bg-purple-100 text-purple-800"
-                      _ -> "bg-red-100 text-red-800"
-                    end
-                  }>
-                    <%= @event_info.estado %>
-                  </span>
-                </div>
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-700 mb-2">¿Activo?</h3>
-                  <p class="text-gray-900"><%= if @event_info.activo, do: "Sí", else: "No" %></p>
-                </div>
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-700 mb-2">Fecha de creación</h3>
-                  <p class="text-gray-900"><%= @event_info.inserted_at %></p>
-                </div>
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-700 mb-2">Última actualización</h3>
-                  <p class="text-gray-900"><%= @event_info.updated_at %></p>
-                </div>
-                <div>
-                  <h3 class="text-lg font-semibold text-gray-700 mb-2">Imagen</h3>
-                  <%= if @event_info.imagen do %>
-                    <img src={@event_info.imagen} alt={@event_info.titulo} class="max-w-full h-auto rounded-md">
-                  <% else %>
-                    <p class="text-gray-500 italic">No hay imagen disponible</p>
-                  <% end %>
-                </div>
+                  </thead>
+                  <tbody class="bg-white divide-y divide-gray-200">
+                    <%= for event_info <- @event_info_list do %>
+                      <tr>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                          <div class="text-sm font-medium text-gray-900"><%= event_info.titulo %></div>
+                        </td>
+                        <td class="px-6 py-4">
+                          <div class="text-sm text-gray-500 max-w-xs truncate">
+                            <%= if event_info.descripcion do %>
+                              <%= String.slice(event_info.descripcion, 0..50) %><%= if String.length(event_info.descripcion || "") > 50, do: "..." %>
+                            <% else %>
+                              <span class="italic text-gray-400">Sin descripción</span>
+                            <% end %>
+                          </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                          <span class={
+                            "px-2 inline-flex text-xs leading-5 font-semibold rounded-full " <>
+                            case event_info.estado do
+                              "activo" -> "bg-green-100 text-green-800"
+                              "publicado" -> "bg-blue-100 text-blue-800"
+                              "inactivo" -> "bg-yellow-100 text-yellow-800"
+                              "finalizado" -> "bg-gray-100 text-gray-800"
+                              "borrador" -> "bg-purple-100 text-purple-800"
+                              _ -> "bg-red-100 text-red-800"
+                            end
+                          }>
+                            <%= String.capitalize(event_info.estado) %>
+                          </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <%= if event_info.activo, do: "Sí", else: "No" %>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <button
+                            phx-click="edit"
+                            phx-value-id={event_info.id}
+                            class="text-indigo-600 hover:text-indigo-900 mr-3"
+                          >
+                            Editar
+                          </button>
+                          <button
+                            phx-click="delete"
+                            phx-value-id={event_info.id}
+                            class="text-red-600 hover:text-red-900"
+                            phx-confirm="¿Estás seguro de que deseas eliminar esta información del evento?"
+                          >
+                            Eliminar
+                          </button>
+                        </td>
+                      </tr>
+                    <% end %>
+                  </tbody>
+                </table>
               </div>
-
-              <div class="mb-6">
-                <h3 class="text-lg font-semibold text-gray-700 mb-2">Descripción</h3>
-                <p class="text-gray-900 whitespace-pre-line"><%= @event_info.descripcion || "No hay descripción disponible" %></p>
-              </div>
-
-              <div class="flex space-x-4">
-                <.link 
-                  href={~p"/admin/event_info/#{@event_info.id}/edit"} 
-                  class="bg-[#144D85] hover:bg-[#0d3a66] text-white font-bold py-2 px-4 rounded transition duration-300"
-                >
-                  Editar
-                </.link>
-                <.link 
-                  phx-click={JS.push("js-flash", value: %{info: "Eliminando...", color: "blue"})}
-                  phx-value-id={@event_info.id}
-                  phx-submit="delete"
-                  data-confirm="¿Está seguro que desea eliminar esta información del evento?" 
-                  class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded transition duration-300"
-                >
-                  Eliminar
-                </.link>
-                <.link 
-                  href={~p"/admin/event_info"} 
-                  class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded transition duration-300"
-                >
-                  Volver al listado
-                </.link>
-              </div>
-            </div>
-
-          <% :new -> %>
-            <div class="p-6">
-              <.live_component 
-                module={YachanakuyWeb.Admin.EventInfoFormComponent}
-                id="event_info_form_new"
-                changeset={@changeset}
-                action={:new}
-              />
-            </div>
-
-          <% :edit -> %>
-            <div class="p-6">
-              <.live_component 
-                module={YachanakuyWeb.Admin.EventInfoFormComponent}
-                id={"event_info_form_#{assigns.event_info.id}"}
-                changeset={@changeset}
-                action={:edit}
-              />
-            </div>
-        <% end %>
+            <% end %>
+          </div>
+        </div>
       </div>
     </div>
     """
