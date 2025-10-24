@@ -76,7 +76,7 @@ defmodule Yachanakuy.Accounts do
   """
   def register_user(attrs) do
     %User{}
-    |> User.email_changeset(attrs)
+    |> User.registration_changeset(attrs)
     |> Repo.insert()
   end
 
@@ -403,5 +403,65 @@ defmodule Yachanakuy.Accounts do
   def get_active_users_by_role(role) when is_binary(role) do
     from(u in User, where: u.rol == ^role and u.activo == true)
     |> Repo.all()
+  end
+
+  @doc """
+  Returns an `%Ecto.Changeset{}` for registering a user.
+
+  ## Examples
+
+      iex> change_user_registration(user)
+      %Ecto.Changeset{data: %User{}}
+
+  """
+  def change_user_registration(%User{} = user, attrs \\ %{}) do
+    User.email_changeset(user, attrs)
+  end
+
+  @doc """
+  Updates a user registration.
+
+  ## Examples
+
+      iex> update_user_registration(user, %{field: new_value})
+      {:ok, %User{}}
+
+      iex> update_user_registration(user, %{field: bad_value})
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def update_user_registration(%User{} = user, attrs) do
+    user
+    |> User.email_changeset(attrs)
+    |> Repo.update()
+  end
+
+  @doc """
+  Updates a user password.
+
+  ## Examples
+
+      iex> update_user_password(user, %{password: ...})
+      {:ok, %User{}}
+
+      iex> update_user_password(user, %{password: "too short"})
+      {:error, %Ecto.Changeset{}}
+
+  """
+
+  @doc """
+  Deletes a user.
+
+  ## Examples
+
+      iex> delete_user(user)
+      {:ok, %User{}}
+
+      iex> delete_user(user)
+      {:error, %Ecto.Changeset{}}
+
+  """
+  def delete_user(%User{} = user) do
+    Repo.delete(user)
   end
 end

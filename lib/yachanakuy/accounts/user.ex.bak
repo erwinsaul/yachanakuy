@@ -163,9 +163,39 @@ defmodule Yachanakuy.Accounts.User do
     Bcrypt.verify_pass(password, hashed_password)
   end
 
+  def valid_password?(_, _) do
+    Bcrypt.no_user_verify()
+    false
+  end
+end
+
+
+  @doc """
+  A user changeset for registration that combines email and password validation.
+
+  ## Examples
+
+      iex> registration_changeset(%User{}, %{email: "test@example.com", password: "password123"})
+      %Ecto.Changeset{valid?: true, changes: %{email: "test@example.com", hashed_password: "$2b$12$..."}}
+
+  """
   def registration_changeset(user, attrs, opts \\ []) do
     user
     |> email_changeset(attrs, opts)
     |> password_changeset(attrs, opts)
   end
-end
+
+  @doc """
+  A user changeset for registration that combines email and password validation.
+
+  ## Examples
+
+      iex> registration_changeset(%User{}, %{email: \"test@example.com\", password: \"password123\"})
+      %Ecto.Changeset{valid?: true, changes: %{email: \"test@example.com\", hashed_password: \"\b\2\$...\"}}
+
+  """
+  def registration_changeset(user, attrs, opts \\ []) do
+    user
+    |> email_changeset(attrs, opts)
+    |> password_changeset(attrs, opts)
+\n  @doc """\n  A user changeset for registration that combines email and password validation.\n\n  ## Examples\n\n      iex> registration_changeset(%User{}, %{email: "test@example.com", password: "password123"})\n      %Ecto.Changeset{valid?: true, changes: %{email: "test@example.com", hashed_password: "$2b$12$..."}}\n\n  """\n  def registration_changeset(user, attrs, opts \\ []) do\n    user\n    |> email_changeset(attrs, opts)\n    |> password_changeset(attrs, opts)\n  end\nend

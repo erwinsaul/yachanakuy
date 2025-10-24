@@ -107,6 +107,9 @@ defmodule YachanakuyWeb.Router do
       
       # Module Configuration
       live "/module_configurations", Admin.ModuleConfigurationLive, :index
+      
+      # User Management
+      live "/users", Admin.UserLive.Index, :index
     end
   end
 
