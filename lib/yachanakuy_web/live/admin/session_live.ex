@@ -133,7 +133,7 @@ defmodule YachanakuyWeb.Admin.SessionLive do
               
               <div>
                 <.input field={f[:tipo]} type="select" label="Tipo"
-                  options={[conferencia: "Conferencia", taller: "Taller", receso: "Receso", plenaria: "Plenaria"]}
+                  options={[{"Conferencia", "conferencia"}, {"Taller", "taller"}, {"Receso", "receso"}, {"Plenaria", "plenaria"}]}
                   prompt="Selecciona un tipo"
                   class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85]"
                 />
