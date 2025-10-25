@@ -4,7 +4,7 @@ defmodule YachanakuyWeb.Admin.SessionLive do
   alias Yachanakuy.Program
 
   def mount(_params, _session, socket) do
-    sessions = Program.list_sessions()
+    sessions = Program.list_sessions_with_details()
     speakers = Program.list_speakers_with_sessions()
     rooms = Program.list_rooms()
     
@@ -32,7 +32,7 @@ defmodule YachanakuyWeb.Admin.SessionLive do
   
     case result do
       {:ok, _session} ->
-        sessions = Program.list_sessions()
+        sessions = Program.list_sessions_with_details()
         speakers = Program.list_speakers_with_sessions()
         rooms = Program.list_rooms()
         changeset = Program.change_session(%Yachanakuy.Program.Session{})
@@ -68,7 +68,7 @@ defmodule YachanakuyWeb.Admin.SessionLive do
     session = Program.get_session!(String.to_integer(id))
     {:ok, _} = Program.delete_session(session)
 
-    sessions = Program.list_sessions()
+    sessions = Program.list_sessions_with_details()
     speakers = Program.list_speakers_with_sessions()
     rooms = Program.list_rooms()
     changeset = Program.change_session(%Yachanakuy.Program.Session{})
