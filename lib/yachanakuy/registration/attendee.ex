@@ -79,6 +79,7 @@ defmodule Yachanakuy.Registration.Attendee do
     has_many :meal_deliveries, Yachanakuy.Deliveries.MealDelivery
     has_many :session_attendances, Yachanakuy.Deliveries.SessionAttendance
     has_one :certificate, Yachanakuy.Certificates.Certificate
+    has_one :attendee_package, Yachanakuy.Registration.AttendeePackage
 
     timestamps(type: :utc_datetime)
   end

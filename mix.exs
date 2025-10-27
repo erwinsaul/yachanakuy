@@ -69,7 +69,8 @@ defmodule Yachanakuy.MixProject do
       {:bcrypt_elixir, "~> 3.0"},
       {:qr_code, "~> 3.1"},
       {:pdf_generator, "~> 0.6.2"},
-      {:timex, "~> 3.7"}
+      {:timex, "~> 3.7"},
+      {:nimble_csv, "~> 1.2"}
     ]
   end
 

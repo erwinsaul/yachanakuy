@@ -44,6 +44,7 @@ defmodule Yachanakuy.Registration do
   import Ecto.Query, warn: false
   alias Yachanakuy.Repo
   alias Yachanakuy.Registration.Attendee
+  alias Yachanakuy.Registration.AttendeePackage
 
   @doc """
   Obtiene una lista de todos los participantes registrados en el sistema.
@@ -64,8 +65,10 @@ defmodule Yachanakuy.Registration do
   def list_attendees_with_details do
     from(a in Attendee,
       left_join: cat in assoc(a, :category),
-      left_join: user in assoc(a, :revisor),
-      preload: [category: cat, revisor: user]
+      left_join: user in assoc(a, :reviewed_by_user),
+      left_join: ap in assoc(a, :attendee_package),
+      left_join: p in assoc(ap, :package),
+      preload: [category: cat, reviewed_by_user: user, attendee_package: {ap, package: p}]
     )
     |> Repo.all()
   end
@@ -73,9 +76,11 @@ defmodule Yachanakuy.Registration do
   def get_attendee_with_details!(id) do
     from(a in Attendee,
       left_join: cat in assoc(a, :category),
-      left_join: user in assoc(a, :revisor),
+      left_join: user in assoc(a, :reviewed_by_user),
+      left_join: ap in assoc(a, :attendee_package),
+      left_join: p in assoc(ap, :package),
       where: a.id == ^id,
-      preload: [category: cat, revisor: user]
+      preload: [category: cat, reviewed_by_user: user, attendee_package: {ap, package: p}]
     )
     |> Repo.one!()
   end
@@ -83,9 +88,9 @@ defmodule Yachanakuy.Registration do
   def get_attendee_by_qr_with_details(qr_code) do
     from(a in Attendee,
       left_join: cat in assoc(a, :category),
-      left_join: user in assoc(a, :revisor),
+      left_join: user in assoc(a, :reviewed_by_user),
       where: a.codigo_qr == ^qr_code,
-      preload: [category: cat, revisor: user]
+      preload: [category: cat, reviewed_by_user: user]
     )
     |> Repo.one()
   end
@@ -180,6 +185,48 @@ defmodule Yachanakuy.Registration do
 
   def change_attendee(%Attendee{} = attendee, attrs \\ %{}) do
     Attendee.changeset(attendee, attrs)
+  end
+
+  @doc """
+  Crea o actualiza la relación entre un inscrito y un paquete.
+  """
+  def assign_package_to_attendee(attendee_id, package_id) do
+    # Verificar si ya existe una relación
+    case Repo.get_by(AttendeePackage, attendee_id: attendee_id) do
+      nil ->
+        # Crear nueva relación
+        %AttendeePackage{}
+        |> AttendeePackage.changeset(%{attendee_id: attendee_id, package_id: package_id})
+        |> Repo.insert()
+
+      existing ->
+        # Actualizar relación existente
+        existing
+        |> AttendeePackage.changeset(%{package_id: package_id})
+        |> Repo.update()
+    end
+  end
+
+  @doc """
+  Obtiene el paquete asignado a un inscrito.
+  """
+  def get_attendee_package(attendee_id) do
+    from(ap in AttendeePackage,
+      where: ap.attendee_id == ^attendee_id,
+      join: p in assoc(ap, :package),
+      preload: [package: p]
+    )
+    |> Repo.one()
+  end
+
+  @doc """
+  Elimina la relación entre un inscrito y un paquete.
+  """
+  def remove_attendee_package(attendee_id) do
+    case Repo.get_by(AttendeePackage, attendee_id: attendee_id) do
+      nil -> {:ok, nil}
+      attendee_package -> Repo.delete(attendee_package)
+    end
   end
 
   @doc """
@@ -414,12 +461,15 @@ defmodule Yachanakuy.Registration do
 
     query = from a in Attendee,
       left_join: cat in assoc(a, :category),
+      left_join: ap in assoc(a, :attendee_package),
+      left_join: p in assoc(ap, :package),
       where: ^build_search_filter(search),
       where: ^build_estado_filter(estado),
       where: ^build_categoria_filter(categoria_id),
       limit: ^page_size,
       offset: ^offset,
-      order_by: [desc: a.inserted_at]
+      order_by: [desc: a.inserted_at],
+      preload: [category: cat, attendee_package: {ap, package: p}]
 
     Repo.all(query)
   end

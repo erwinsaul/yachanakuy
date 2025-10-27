@@ -72,8 +72,9 @@ defmodule Yachanakuy.Uploads.Handler do
                 case validate_file_security(destination) do
                   :ok ->
                     # Devolver ruta relativa para almacenar en la base de datos
+                    # con / inicial para que Phoenix pueda servirla correctamente
                     relative_path = Path.relative_to(destination, "priv/static")
-                    {:ok, relative_path}
+                    {:ok, "/" <> relative_path}
                   error ->
                     # Eliminar archivo si hay problemas de seguridad
                     File.rm(destination)

@@ -4,6 +4,8 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
   alias Yachanakuy.Registration
   alias Yachanakuy.Events
   alias Yachanakuy.Uploads.Handler
+  alias Yachanakuy.Tourism
+  alias Yachanakuy.Settings
 
   def mount(_params, _session, socket) do
     # Verificar si las inscripciones están abiertas
@@ -15,6 +17,10 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     else
       categories = Events.list_attendee_categories()
 
+      # Verificar si el módulo de paquetes está habilitado y cargar paquetes
+      packages_enabled = Settings.is_module_enabled("packages")
+      packages = if packages_enabled, do: Tourism.list_packages(), else: []
+
       socket = socket
       |> assign(
         current_step: 1,
@@ -25,6 +31,8 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
           participantes: []
         },
         categories: categories,
+        packages: packages,
+        packages_enabled: packages_enabled,
         settings: settings,
         page: "inscripcion",
         error: nil,
@@ -108,7 +116,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
       2 ->
         # Validar Paso 2 - registrar errores por campo
         registration_data = socket.assigns.registration_data
-        field_errors = validate_step2_field_errors(registration_data)
+        field_errors = validate_step2_field_errors(registration_data, socket.assigns.packages_enabled)
         uniqueness_errors = validate_uniqueness_errors(registration_data)
 
         # Combinar todos los errores
@@ -265,13 +273,24 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
         end
     end
 
+    # Convertir package_id a integer si no está vacío
+    package_id = case Map.get(params, "package_id", "") |> String.trim() do
+      "" -> nil
+      id_str ->
+        case Integer.parse(id_str) do
+          {id_int, _} -> id_int
+          :error -> nil
+        end
+    end
+
     participante_data = %{
       nombre_completo: Map.get(params, "nombre_completo", "") |> String.trim(),
       numero_documento: Map.get(params, "numero_documento", "") |> String.trim(),
       email: Map.get(params, "email", "") |> String.trim(),
       telefono: Map.get(params, "telefono", "") |> String.trim(),
       foto: Map.get(params, "foto", "") |> String.trim(),
-      category_id: category_id
+      category_id: category_id,
+      package_id: package_id
     }
 
     registration_data = socket.assigns.registration_data
@@ -454,8 +473,16 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
     errors
   end
 
-  defp validate_step2_field_errors(registration_data) do
-    required_fields = [:nombre_completo, :numero_documento, :email, :category_id]
+  defp validate_step2_field_errors(registration_data, packages_enabled) do
+    # Campos requeridos base
+    base_required_fields = [:nombre_completo, :numero_documento, :email, :category_id]
+
+    # Si el módulo de paquetes está habilitado, agregar package_id como obligatorio
+    required_fields = if packages_enabled do
+      base_required_fields ++ [:package_id]
+    else
+      base_required_fields
+    end
 
     # Validar solo los participantes según la cantidad especificada
     participantes_a_validar = Enum.take(registration_data.participantes, registration_data.cantidad_personas)
@@ -491,6 +518,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
             :numero_documento -> "Número de documento es obligatorio"
             :email -> "Email es obligatorio"
             :category_id -> "Categoría es obligatoria"
+            :package_id -> "Paquete de conferencias es obligatorio"
             _ -> "Este campo es obligatorio"
           end
           Map.put(inner_errors, field_key, error_msg)
@@ -510,6 +538,7 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
             :numero_documento -> "Número de documento es obligatorio"
             :email -> "Email es obligatorio"
             :category_id -> "Categoría es obligatoria"
+            :package_id -> "Paquete de conferencias es obligatorio"
             _ -> "Este campo es obligatorio"
           end
           Map.put(inner_errors, field_key, error_msg)
@@ -571,7 +600,8 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
         email: "",
         telefono: "",
         foto: "",
-        category_id: nil
+        category_id: nil,
+        package_id: nil
       }
       participantes ++ List.duplicate(empty_participante, cantidad_personas - current_length)
     else
@@ -607,7 +637,20 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
       IO.inspect(attendee_params, label: "Parámetros del participante")
       result = Registration.create_attendee(attendee_params)
       IO.inspect(result, label: "Resultado de create_attendee")
-      result
+
+      # Si se creó exitosamente y hay package_id, crear la relación
+      case result do
+        {:ok, attendee} ->
+          if participante.package_id && socket.assigns.packages_enabled do
+            case Registration.assign_package_to_attendee(attendee.id, participante.package_id) do
+              {:ok, _} -> result
+              {:error, _} -> result  # Aún así retornamos success del attendee
+            end
+          else
+            result
+          end
+        error -> error
+      end
     end
 
     IO.inspect(results, label: "Todos los resultados")
@@ -655,8 +698,9 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
           <div class="bg-white rounded-lg shadow-lg p-6">
             <!-- Indicador de pasos -->
             <div class="mb-8">
-              <h1 class="text-3xl font-bold mb-2 text-[#144D85]">CCBOL 2025</h1>
-              <h2 class="text-2xl font-semibold mb-4 text-[#144D85]">Formulario de Inscripción</h2>
+              <h1 class="text-3xl font-bold mb-2 text-[#144D85]">
+                Inscripción a <%= if @settings && @settings.nombre, do: @settings.nombre, else: "CCBOL 2025" %>
+              </h1>
               
               <!-- Barra de progreso -->
               <div class="flex items-center justify-between mb-6">
@@ -898,8 +942,8 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
 
               <div>
                 <label class="block text-gray-700 font-medium mb-2">Categoría de participante <span class="text-red-500">*</span></label>
-                <select 
-                  name="participante[category_id]" 
+                <select
+                  name="participante[category_id]"
                   class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] text-gray-900 " <> if(Map.get(@errors, String.to_atom("participante_#{index}_category_id")), do: "border-red-500", else: "border-gray-300")}
                   value={participante.category_id}
                   required
@@ -913,6 +957,27 @@ defmodule YachanakuyWeb.Public.RegistrationLive do
                   <p class="text-sm text-red-600 mt-1"><%= error %></p>
                 <% end %>
               </div>
+
+              <%= if @packages_enabled && length(@packages) > 0 do %>
+                <div>
+                  <label class="block text-gray-700 font-medium mb-2">Paquete de conferencias <span class="text-red-500">*</span></label>
+                  <select
+                    name="participante[package_id]"
+                    class={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-[#144D85] text-gray-900 " <> if(Map.get(@errors, String.to_atom("participante_#{index}_package_id")), do: "border-red-500", else: "border-gray-300")}
+                    value={participante.package_id}
+                    required
+                  >
+                    <option value="">Selecciona un paquete</option>
+                    <%= for package <- @packages do %>
+                      <option value={package.id} selected={participante.package_id == package.id}><%= package.titulo %></option>
+                    <% end %>
+                  </select>
+                  <%= if error = Map.get(@errors, String.to_atom("participante_#{index}_package_id")) do %>
+                    <p class="text-sm text-red-600 mt-1"><%= error %></p>
+                  <% end %>
+                  <p class="text-sm text-gray-500 mt-1">Selecciona el paquete de conferencias al que deseas asistir</p>
+                </div>
+              <% end %>
             </form>
           </div>
         <% end %>
